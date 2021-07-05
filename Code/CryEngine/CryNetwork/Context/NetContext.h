@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 /*************************************************************************
    -------------------------------------------------------------------------
@@ -85,6 +85,7 @@ public:
 	virtual void            ChangedTransform(EntityId id, const Vec3& pos, const Quat& rot, float drawDist);
 	virtual void            ChangedFov(EntityId id, float fov);
 #endif
+	virtual void            StartedEstablishingContext(int establishToken);
 	virtual void            EstablishedContext(int establishToken);
 	virtual void            SpawnedObject(EntityId userID);
 	virtual bool            IsBound(EntityId userID);
@@ -139,7 +140,6 @@ public:
 	virtual NetworkAspectType ServerControllerOnlyAspects() const { return m_serverControllerOnlyAspects; }
 	virtual NetworkAspectType DelegatableAspects() const          { return m_delegatableAspects; }
 	NetworkAspectType         ServerManagedProfileAspects() const { return m_serverManagedProfileAspects; }
-	NetworkAspectType         HashedAspects() const               { return m_hashAspects; }
 	NetworkAspectType         DeclaredAspects() const             { return m_declaredAspects; }
 	NetworkAspectType         TimestampedAspects() const          { return m_timestampedAspects; }
 	NetworkAspectType         DisabledCompressionAspects() const  { return m_disabledCompressionAspects; }
@@ -202,7 +202,6 @@ private:
 	NetworkAspectType m_serverControllerOnlyAspects;
 	NetworkAspectType m_delegatableAspects;
 	NetworkAspectType m_regularlyUpdatedAspects;
-	NetworkAspectType m_hashAspects;
 	NetworkAspectType m_declaredAspects;
 	NetworkAspectType m_serverManagedProfileAspects;
 	NetworkAspectType m_timestampedAspects;
@@ -235,8 +234,8 @@ private:
 	INetContextListenerPtr       m_pAspectBandwidthDebugger;
 
 #if SERVER_FILE_SYNC_MODE
-	std::auto_ptr<CSyncedFileSet> m_pFileSet;
-	std::auto_ptr<CSyncedFilePak> m_pFilePak;
+	std::unique_ptr<CSyncedFileSet> m_pFileSet;
+	std::unique_ptr<CSyncedFilePak> m_pFilePak;
 #endif
 
 	// this context's session id

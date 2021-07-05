@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 //               Distributed under the MIT License. See LICENSE file.
 //               https://github.com/ashima/webgl-noise
@@ -330,7 +330,7 @@ Vec4_tpl<Real> grad4(Real j, Vec4_tpl<Real> ip)
 }
 
 template<typename Real>
-ILINE Real SNoise(Vec4_tpl<Real> v, Vec4_tpl<Real>* pGrad = nullptr)
+Real SNoise(Vec4_tpl<Real> v, Vec4_tpl<Real>* pGrad = nullptr)
 {
 	using namespace crydetail;
 

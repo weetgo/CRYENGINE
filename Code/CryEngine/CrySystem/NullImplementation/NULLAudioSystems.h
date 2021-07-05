@@ -1,70 +1,91 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
 #include <CryAudio/IAudioSystem.h>
-#include <CrySystem/TimeValue.h>
+#include <CryAudio/IObject.h>
 
-struct ICVar;
-
-class CNULLAudioProxy : public IAudioProxy
+namespace CryAudio
+{
+namespace Null
+{
+class CObject final : public IObject
 {
 public:
 
-	CNULLAudioProxy() {}
-	virtual ~CNULLAudioProxy() {}
+	CObject() = default;
+	virtual ~CObject() override = default;
 
-	virtual void          Initialize(char const* const szAudioObjectName, bool const bInitAsync = true) override                                                      {}
-	virtual void          Release() override                                                                                                                          {}
-	virtual void          Reset() override                                                                                                                            {}
-	virtual void          PlayFile(SAudioPlayFileInfo const& playbackInfo, SAudioCallBackInfo const& callBackInfo = SAudioCallBackInfo::GetEmptyObject()) override    {}
-	virtual void          StopFile(char const* const szFile) override                                                                                                 {}
-	virtual void          ExecuteTrigger(AudioControlId const audioTriggerId, SAudioCallBackInfo const& callBackInfo = SAudioCallBackInfo::GetEmptyObject()) override {}
-	virtual void          StopTrigger(AudioControlId const audioTriggerId) override                                                                                   {}
-	virtual void          SetSwitchState(AudioControlId const audioSwitchId, AudioSwitchStateId const audioSwitchStateId) override                                    {}
-	virtual void          SetRtpcValue(AudioControlId const audioRtpcId, float const value) override                                                                  {}
-	virtual void          SetOcclusionType(EAudioOcclusionType const occlusionType) override                                                                          {}
-	virtual void          SetTransformation(Matrix34 const& transformation) override                                                                                  {}
-	virtual void          SetPosition(Vec3 const& position) override                                                                                                  {}
-	virtual void          SetEnvironmentAmount(AudioEnvironmentId const audioEnvironmentId, float const amount) override                                              {}
-	virtual void          SetCurrentEnvironments(EntityId const entityToIgnore = 0) override                                                                          {}
-	virtual CATLAudioObject* GetAudioObject() const override                                                                                                             { return nullptr; }
+	virtual void ExecuteTrigger(ControlId const triggerId, EntityId const entityId = INVALID_ENTITYID, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                             {}
+	virtual void ExecuteTriggerWithCallbacks(STriggerCallbackData const& callbackData, EntityId const entityId = INVALID_ENTITYID, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override {}
+	virtual void StopTrigger(ControlId const triggerId = InvalidControlId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                         {}
+	virtual void SetTransformation(CTransformation const& transformation, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                          {}
+	virtual void SetParameter(ControlId const parameterId, float const value, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                      {}
+	virtual void SetSwitchState(ControlId const audioSwitchId, SwitchStateId const audioSwitchStateId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                             {}
+	virtual void SetEnvironment(EnvironmentId const audioEnvironmentId, float const amount, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                        {}
+	virtual void SetCurrentEnvironments(EntityId const entityToIgnore = 0, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                         {}
+	virtual void SetOcclusionType(EOcclusionType const occlusionType, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                              {}
+	virtual void SetOcclusionRayOffset(float const occlusionRayOffset, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                             {}
+	virtual void SetName(char const* const szName, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                                 {}
+	virtual void AddListener(ListenerId const id, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                                  {}
+	virtual void RemoveListener(ListenerId const id, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                               {}
+	virtual void ToggleAbsoluteVelocityTracking(bool const enable, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                 {}
+	virtual void ToggleRelativeVelocityTracking(bool const enable, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                 {}
 };
 
-class CNULLAudioSystem : public IAudioSystem
+class CSystem final : public IAudioSystem
 {
 public:
 
-	CNULLAudioSystem() = default;
-	virtual ~CNULLAudioSystem() override = default;
+	CSystem() = default;
+	CSystem(CSystem const&) = delete;
+	CSystem(CSystem&&) = delete;
+	CSystem&            operator=(CSystem const&) = delete;
+	CSystem&            operator=(CSystem&&) = delete;
 
-	CNULLAudioSystem(CNULLAudioSystem const&) = delete;
-	CNULLAudioSystem(CNULLAudioSystem&&) = delete;
-	CNULLAudioSystem& operator=(CNULLAudioSystem const&) = delete;
-	CNULLAudioSystem& operator=(CNULLAudioSystem&&) = delete;
-
-	virtual bool          Initialize() override                                                                                                                                                                                                                                                     { return true; }
-	virtual void          Release() override                                                                                                                                                                                                                                                        { delete this; }
-	virtual void          PushRequest(SAudioRequest const& audioRequest) override                                                                                                                                                                                                                   {}
-	virtual void          AddRequestListener(void (* func)(SAudioRequestInfo const* const), void* const pObjectToListenTo, EAudioRequestType const requestType = eAudioRequestType_AudioAllRequests, AudioEnumFlagsType const specificRequestMask = ALL_AUDIO_REQUEST_SPECIFIC_TYPE_FLAGS) override {}
-	virtual void          RemoveRequestListener(void (* func)(SAudioRequestInfo const* const), void* const pObjectToListenTo) override                                                                                                                                                              {}
-	virtual void          ExternalUpdate() override                                                                                                                                                                                                                                                 {}
-	virtual bool          GetAudioTriggerId(char const* const szAudioTriggerName, AudioControlId& audioTriggerId) const override                                                                                                                                                                    { return true; }
-	virtual bool          GetAudioRtpcId(char const* const szAudioRtpcName, AudioControlId& audioRtpcId) const override                                                                                                                                                                             { return true; }
-	virtual bool          GetAudioSwitchId(char const* const szAudioSwitchName, AudioControlId& audioSwitchId) const override                                                                                                                                                                       { return true; }
-	virtual bool          GetAudioSwitchStateId(AudioControlId const audioSwitchId, char const* const szSwitchStateName, AudioSwitchStateId& audioSwitchStateId) const override                                                                                                                     { return true; }
-	virtual bool          GetAudioPreloadRequestId(char const* const szAudioPreloadRequestName, AudioPreloadRequestId& audioPreloadRequestId) const override                                                                                                                                        { audioPreloadRequestId = INVALID_AUDIO_PRELOAD_REQUEST_ID; return true; }
-	virtual bool          GetAudioEnvironmentId(char const* const szAudioEnvironmentName, AudioEnvironmentId& audioEnvironmentId) const override                                                                                                                                                    { audioEnvironmentId = INVALID_AUDIO_ENVIRONMENT_ID; return true; }
-	virtual CATLListener* CreateAudioListener() override                                                                                                                                                                                                                                            { return nullptr; }
-	virtual void          ReleaseAudioListener(CATLListener* pListener) override                                                                                                                                                                                                                    {}
-	virtual void          OnCVarChanged(ICVar* const pCvar) override                                                                                                                                                                                                                                {}
-	virtual char const*   GetConfigPath() const override                                                                                                                                                                                                                                            { return ""; }
-	virtual IAudioProxy*  GetFreeAudioProxy() override                                                                                                                                                                                                                                              { return static_cast<IAudioProxy*>(&m_nullAudioProxy); }
-	virtual void          GetAudioFileData(char const* const szFilename, SAudioFileData& audioFileData) override                                                                                                                                                                                    {}
-	virtual void          GetAudioTriggerData(AudioControlId const audioTriggerId, SAudioTriggerData& audioFileData) override                                                                                                                                                                       {}
-	virtual void          SetAllowedThreadId(threadID id) override                                                                                                                                                                                                                                  {}
+	virtual void        Release() override                                                                                                                                                                                  {}
+	virtual void        SetImpl(Impl::IImpl* const pIImpl, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                                  {}
+	virtual void        ExecuteTriggerEx(SExecuteTriggerData const& triggerData, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                            {}
+	virtual void        ExecuteTrigger(ControlId const triggerId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                           {}
+	virtual void        ExecuteTriggerWithCallbacks(STriggerCallbackData const& callbackData, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                               {}
+	virtual void        StopTrigger(ControlId const triggerId = InvalidControlId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                           {}
+	virtual void        SetParameter(ControlId const parameterId, float const value, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                        {}
+	virtual void        SetParameterGlobally(ControlId const parameterId, float const value, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                {}
+	virtual void        SetSwitchState(ControlId const switchId, SwitchStateId const switchStateId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                         {}
+	virtual void        SetSwitchStateGlobally(ControlId const switchId, SwitchStateId const switchStateId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                 {}
+	virtual void        ReportStartedTriggerConnectionInstance(TriggerInstanceId const triggerInstanceId, ETriggerResult const result, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override      {}
+	virtual void        ReportFinishedTriggerConnectionInstance(TriggerInstanceId const triggerInstanceId, ETriggerResult const result, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override     {}
+	virtual void        ReportTriggerConnectionInstanceCallback(TriggerInstanceId const triggerInstanceId, ESystemEvents const systemEvent, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override {}
+	virtual void        ReportPhysicalizedObject(Impl::IObject* const pIObject, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                             {}
+	virtual void        ReportVirtualizedObject(Impl::IObject* const pIObject, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                              {}
+	virtual void        StopAllSounds(SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                                                       {}
+	virtual void        PreloadSingleRequest(PreloadRequestId const id, bool const bAutoLoadOnly, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                           {}
+	virtual void        UnloadSingleRequest(PreloadRequestId const id, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                      {}
+	virtual void        ActivateContext(ContextId const contextId) override                                                                                                                                                 {}
+	virtual void        DeactivateContext(ContextId const contextId) override                                                                                                                                               {}
+	virtual void        LoadSetting(ControlId const id, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                                     {}
+	virtual void        UnloadSetting(ControlId const id, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) override                                                                                   {}
+	virtual void        AddRequestListener(void (*func)(SRequestInfo const* const), void* const pObjectToListenTo, ESystemEvents const eventMask) override                                                                  {}
+	virtual void        RemoveRequestListener(void (*func)(SRequestInfo const* const), void* const pObjectToListenTo) override                                                                                              {}
+	virtual void        ExternalUpdate() override                                                                                                                                                                           {}
+	virtual char const* GetConfigPath() const override                                                                                                                                                                      { return ""; }
+	virtual IListener*  CreateListener(CTransformation const& transformation, char const* const szName = nullptr) override                                                                                                  { return nullptr; }
+	virtual void        ReleaseListener(IListener* const pIListener) override                                                                                                                                               {}
+	virtual IListener*  GetListener(ListenerId const id = DefaultListenerId) override                                                                                                                                       { return nullptr; }
+	virtual IObject*    CreateObject(SCreateObjectData const& objectData = SCreateObjectData::GetEmptyObject()) override                                                                                                    { return static_cast<IObject*>(&m_object); }
+	virtual void        ReleaseObject(IObject* const pIObject) override                                                                                                                                                     {}
+	virtual void        GetTriggerData(ControlId const triggerId, STriggerData& triggerData) override                                                                                                                       {}
+	virtual void        GetImplInfo(SImplInfo& implInfo) override                                                                                                                                                           {}
+	virtual void        Log(ELogType const type, char const* const szFormat, ...) override                                                                                                                                  {}
+	virtual void        ExecutePreviewTrigger(ControlId const triggerId) override                                                                                                                                           {}
+	virtual void        ExecutePreviewTriggerEx(Impl::ITriggerInfo const& triggerInfo) override                                                                                                                             {}
+	virtual void        ExecutePreviewTriggerEx(XmlNodeRef const& node) override                                                                                                                                            {}
+	virtual void        StopPreviewTrigger() override                                                                                                                                                                       {}
+	virtual void        RefreshObject(Impl::IObject* const pIObject) override                                                                                                                                               {}
 
 private:
 
-	CNULLAudioProxy m_nullAudioProxy;
+	CObject m_object;
 };
+} // namespace Null
+} // namespace CryAudio

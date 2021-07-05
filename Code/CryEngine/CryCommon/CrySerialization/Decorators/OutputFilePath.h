@@ -1,8 +1,8 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
-#include <yasli/Config.h>
+#include <CrySerialization/yasli/Config.h>
 #include <CrySerialization/Forward.h>
 
 namespace Serialization
@@ -23,6 +23,8 @@ struct OutputFilePath
 		, startFolder(startFolder)
 	{
 	}
+
+	virtual ~OutputFilePath() {}
 
 	//! This function should stay virtual to ensure cross-dll calls are using right heap.
 	virtual void SetPath(const char* path) { *this->path = path; }

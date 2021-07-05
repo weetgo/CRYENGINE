@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #ifndef __FILE_TREE_H__
 #define __FILE_TREE_H__
@@ -22,6 +22,10 @@ class CFileTree : public _TinyTreeView
 public:
 	CFileTree() { m_iID = 0; };
 	virtual ~CFileTree() {};
+
+	using _TinyWindow::Create;
+	using _TinyTreeView::Create;
+	using _TinyTreeView::AddItemToTree;
 
 	BOOL Create(const _TinyRect& rcWnd, _TinyWindow* pParent = NULL, UINT iID = NULL)
 	{

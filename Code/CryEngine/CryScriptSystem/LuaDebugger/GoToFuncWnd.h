@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #ifndef __GOTOFUNCWND_H__
 #define __GOTOFUNCWND_H__
@@ -10,6 +10,9 @@
 class CGoToFuncWnd : public _TinyDialog
 {
 public:
+
+	using _TinyWindow::Create;
+
 	BOOL Create(_TinyWindow* pParent = NULL)
 	{
 		return _TinyDialog::Create(MAKEINTRESOURCE(IDD_GOTO_FUNC), pParent);

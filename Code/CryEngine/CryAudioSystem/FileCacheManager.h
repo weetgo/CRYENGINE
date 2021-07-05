@@ -1,29 +1,27 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
-#include "ATLEntities.h"
+#include "Common.h"
+#include <CryAudio/IAudioInterfacesCommonData.h>
 #include <CrySystem/IStreamEngine.h>
+#include <CryMemory/IMemory.h>
 
-// Forward declarations
-struct ICustomMemoryHeap;
-class CATLAudioFileEntry;
+#if defined(CRY_AUDIO_USE_DEBUG_CODE)
 struct IRenderAuxGeom;
+#endif // CRY_AUDIO_USE_DEBUG_CODE
 
-// Filter for drawing debug info to the screen
-enum EAudioFileCacheManagerDebugFilter
+namespace CryAudio
 {
-	eAFCMDF_ALL             = 0,
-	eAFCMDF_GLOBALS         = BIT(6), // a
-	eAFCMDF_LEVEL_SPECIFICS = BIT(7), // b
-	eAFCMDF_USE_COUNTED     = BIT(8), // c
-};
+struct ICustomMemoryHeap;
+class CFile;
 
 class CFileCacheManager final : public IStreamCallback
 {
 public:
 
-	explicit CFileCacheManager(AudioPreloadRequestLookup& preloadRequests);
+	CFileCacheManager() = default;
+	~CFileCacheManager();
 
 	CFileCacheManager(CFileCacheManager const&) = delete;
 	CFileCacheManager(CFileCacheManager&&) = delete;
@@ -31,21 +29,31 @@ public:
 	CFileCacheManager& operator=(CFileCacheManager&&) = delete;
 
 	// Public methods
-	void                Init(CryAudio::Impl::IAudioImpl* const pImpl);
-	void                Release();
-	void                Update();
-	AudioFileEntryId    TryAddFileCacheEntry(XmlNodeRef const pFileNode, EAudioDataScope const dataScope, bool const bAutoLoad);
-	bool                TryRemoveFileCacheEntry(AudioFileEntryId const audioFileEntryId, EAudioDataScope const dataScope);
-	void                UpdateLocalizedFileCacheEntries();
-	void                DrawDebugInfo(IRenderAuxGeom& auxGeom, float const posX, float const posY);
-	EAudioRequestStatus TryLoadRequest(AudioPreloadRequestId const audioPreloadRequestId, bool const bLoadSynchronously, bool const bAutoLoadOnly);
-	EAudioRequestStatus TryUnloadRequest(AudioPreloadRequestId const audioPreloadRequestId);
-	EAudioRequestStatus UnloadDataByScope(EAudioDataScope const dataScope);
+	void           Initialize();
+	FileId         TryAddFileCacheEntry(XmlNodeRef const& fileNode, ContextId const contextId, bool const isAutoLoad);
+	bool           TryRemoveFileCacheEntry(FileId const id, ContextId const contextId);
+	void           UpdateLocalizedFileCacheEntries();
+	ERequestStatus TryLoadRequest(
+		PreloadRequestId const preloadRequestId,
+		bool const loadSynchronously,
+		bool const autoLoadOnly,
+		ERequestFlags const flags = ERequestFlags::None,
+		void* const pOwner = nullptr,
+		void* const pUserData = nullptr,
+		void* const pUserDataOwner = nullptr);
+	ERequestStatus TryUnloadRequest(PreloadRequestId const preloadRequestId);
+	void           UnloadDataByContext(ContextId const contextId);
+
+#if defined(CRY_AUDIO_USE_DEBUG_CODE)
+	void   UpdateDebugInfo(char const* const szDebugFilter);
+	void   DrawDebugInfo(IRenderAuxGeom& auxGeom, float const posX, float posY);
+	size_t GetTotalCachedFileSize() const { return m_currentByteTotal; }
+#endif // CRY_AUDIO_USE_DEBUG_CODE
 
 private:
 
 	// Internal type definitions.
-	typedef std::map<AudioFileEntryId, CATLAudioFileEntry*, std::less<AudioFileEntryId>, STLSoundAllocator<std::pair<AudioFileEntryId const, CATLAudioFileEntry*>>> AudioFileEntries;
+	using Files = std::map<FileId, CFile*>;
 
 	// IStreamCallback
 	virtual void StreamAsyncOnComplete(IReadStream* pStream, unsigned int nError) override;
@@ -53,21 +61,31 @@ private:
 	// ~IStreamCallback
 
 	// Internal methods
-	void AllocateHeap(size_t const size, char const* const szUsage);
-	bool UncacheFileCacheEntryInternal(CATLAudioFileEntry* const pAudioFileEntry, bool const bNow, bool const bIgnoreUsedCount = false);
-	bool DoesRequestFitInternal(size_t const requestSize);
+	bool UncacheFileCacheEntryInternal(CFile* const pFile, bool const uncacheImmediately, bool const ignoreUsedCount = false);
 	bool FinishStreamInternal(IReadStreamPtr const pStream, int unsigned const error);
-	bool AllocateMemoryBlockInternal(CATLAudioFileEntry* const __restrict pAudioFileEntry);
-	void UncacheFile(CATLAudioFileEntry* const pAudioFileEntry);
+	bool AllocateMemoryBlockInternal(CFile* const __restrict pFile);
+	void UncacheFile(CFile* const pFile);
 	void TryToUncacheFiles();
-	void UpdateLocalizedFileEntryData(CATLAudioFileEntry* const pAudioFileEntry);
-	bool TryCacheFileCacheEntryInternal(CATLAudioFileEntry* const pAudioFileEntry, AudioFileEntryId const audioFileEntryId, bool const bLoadSynchronously, bool const bOverrideUseCount = false, size_t const useCount = 0);
+	void UpdateLocalizedFileData(CFile* const pFile);
+	bool TryCacheFileCacheEntryInternal(CFile* const pFile, FileId const id, bool const loadSynchronously, bool const overrideUseCount = false, size_t const useCount = 0);
+	void SendFinishedPreloadRequest(
+		PreloadRequestId const preloadRequestId,
+		bool const isFullSuccess,
+		ERequestFlags const flags,
+		void* const pOwner,
+		void* const pUserData,
+		void* const pUserDataOwner);
 
 	// Internal members
-	CryAudio::Impl::IAudioImpl*   m_pImpl;
-	AudioPreloadRequestLookup&    m_preloadRequests;
-	AudioFileEntries              m_audioFileEntries;
-	_smart_ptr<ICustomMemoryHeap> m_pMemoryHeap;
-	size_t                        m_currentByteTotal;
-	size_t                        m_maxByteTotal;
+	Files                           m_files;
+	_smart_ptr<::ICustomMemoryHeap> m_pMemoryHeap;
+
+#if defined(CRY_AUDIO_USE_DEBUG_CODE)
+	size_t m_currentByteTotal = 0;
+
+	#if CRY_PLATFORM_DURANGO
+	size_t m_maxByteTotal = 0;
+	#endif // CRY_PLATFORM_DURANGO
+#endif   // CRY_AUDIO_USE_DEBUG_CODE
 };
+} // namespace CryAudio

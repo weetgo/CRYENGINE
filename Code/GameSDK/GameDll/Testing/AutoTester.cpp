@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 /*************************************************************************
 -------------------------------------------------------------------------
@@ -280,7 +280,7 @@ void CAutoTester::Start(const char *stateSetup, const char *outputPath, bool qui
 	}
 	else
 	{
-		CRY_ASSERT_MESSAGE(0, string().Format("CAutoTester::Start() failed to find state at start in %s", stateSetup));
+		CRY_ASSERT(0, string().Format("CAutoTester::Start() failed to find state at start in %s", stateSetup));
 	}
 
 	// TODO will maybe need to load in the existing file if we want all tests in the same file... junit/bamboo should cope with each test in a different file?
@@ -313,9 +313,12 @@ void CAutoTester::AddTestCaseResult(const char *testSuiteName, XmlNodeRef &testC
 #endif
 	XmlString xmlStr = xmlToSave->getXML();
 
-	CDebugAllowFileAccess allowFileAccess;
-	FILE *file = gEnv->pCryPak->FOpen( fileName,"wt" );
-	allowFileAccess.End();
+	FILE* file = nullptr;
+	{
+		SCOPED_ALLOW_FILE_ACCESS_FROM_THIS_THREAD();
+		file = gEnv->pCryPak->FOpen(fileName, "wt");
+	}
+
 	if (file)
 	{
 		const char *sxml = (const char*)xmlStr;
@@ -1044,7 +1047,7 @@ void CAutoTester::Update()
 					UpdatePerformanceTest();
 					break;
 				default:
-					CRY_ASSERT_MESSAGE(0, string().Format("CAutoTester::Update() unrecognised state %d (%s)", m_state, s_autoTesterStateNames[m_state]));
+					CRY_ASSERT(0, string().Format("CAutoTester::Update() unrecognised state %d (%s)", m_state, s_autoTesterStateNames[m_state]));
 					break;
 			}
 		}

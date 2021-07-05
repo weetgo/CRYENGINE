@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 /*************************************************************************
    -------------------------------------------------------------------------
@@ -12,6 +12,8 @@
 #include <CryNetwork/IServiceNetwork.h>
 #include "RemoteCommand.h"
 #include "RemoteCommandHelpers.h"
+#include <CrySystem/ConsoleRegistration.h>
+#include <CrySystem/ConsoleRegistration.h>
 
 //-----------------------------------------------------------------------------
 
@@ -27,17 +29,12 @@
 CRemoteCommandManager::CRemoteCommandManager()
 {
 	// Create the CVAR
-	m_pVerboseLevel = gEnv->pConsole->RegisterInt("rc_debugVerboseLevel", 0, VF_DEV_ONLY);
+	m_pVerboseLevel = REGISTER_INT("rc_debugVerboseLevel", 0, VF_DEV_ONLY, "");
 }
 
 CRemoteCommandManager::~CRemoteCommandManager()
 {
-	// Release the CVar
-	if (NULL != m_pVerboseLevel)
-	{
-		m_pVerboseLevel->Release();
-		m_pVerboseLevel = NULL;
-	}
+	SAFE_UNREGISTER_CVAR(m_pVerboseLevel);
 }
 
 IRemoteCommandServer* CRemoteCommandManager::CreateServer(uint16 localPort)

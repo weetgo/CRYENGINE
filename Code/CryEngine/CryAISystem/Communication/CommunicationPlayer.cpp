@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "CommunicationPlayer.h"
@@ -38,7 +38,7 @@ void CommunicationPlayer::PlayState::OnCommunicationEvent(
 		break;
 	}
 
-	if (gAIEnv.CVars.DebugDrawCommunication == 5 && prevFlags != finishedFlags)
+	if (gAIEnv.CVars.legacyCommunicationSystem.DebugDrawCommunication == 5 && prevFlags != finishedFlags)
 	{
 		if (finishedFlags != FinishedAll)
 		{
@@ -82,10 +82,10 @@ void CommunicationPlayer::Reset()
 			commHandler->StopAnimation(it->first, playState.animationName.c_str(), method);
 		}
 
-		if (playState.soundInfo.playSoundControlId != INVALID_AUDIO_CONTROL_ID)
+		if (playState.soundInfo.playSoundControlId != CryAudio::InvalidControlId)
 			commHandler->StopSound(playState.soundInfo);
 
-		if (playState.voiceInfo.playSoundControlId != INVALID_AUDIO_CONTROL_ID)
+		if (playState.voiceInfo.playSoundControlId != CryAudio::InvalidControlId)
 			commHandler->StopVoice(playState.voiceInfo);
 	}
 
@@ -169,7 +169,7 @@ bool CommunicationPlayer::Play(const CommPlayID& playID, const SCommunicationReq
 		playState.soundInfo = commHandler->PlaySound(playID, variation.soundName.c_str(),
 		                                             (variation.flags & SCommunication::FinishSound) ? this : 0);
 
-		if (playState.soundInfo.playSoundControlId == INVALID_AUDIO_CONTROL_ID)
+		if (playState.soundInfo.playSoundControlId == CryAudio::InvalidControlId)
 		{
 			AIWarning("Failed to play communication sound '%s'...", variation.soundName.c_str());
 
@@ -184,7 +184,7 @@ bool CommunicationPlayer::Play(const CommPlayID& playID, const SCommunicationReq
 		playState.voiceInfo = commHandler->PlayVoice(playID, variation.voiceName.c_str(),
 		                                             (variation.flags & SCommunication::FinishVoice) ? this : 0);
 
-		if (playState.voiceInfo.playSoundControlId == INVALID_AUDIO_CONTROL_ID)
+		if (playState.voiceInfo.playSoundControlId == CryAudio::InvalidControlId)
 		{
 			AIWarning("Failed to play communication voice '%s'...", variation.voiceName.c_str());
 
@@ -231,7 +231,7 @@ void CommunicationPlayer::Update(float updateTime)
 
 			PlayingCommunications::iterator erased = it++;
 
-			if (gAIEnv.CVars.DebugDrawCommunication == 5)
+			if (gAIEnv.CVars.legacyCommunicationSystem.DebugDrawCommunication == 5)
 				CryLogAlways("CommunicationPlayer removed finished: %s[%u] as playID[%u] with listener[%p]", gAIEnv.pCommunicationManager->GetCommunicationName(erased->second.commID), erased->second.commID.id, erased->first.id, erased->second.listener);
 
 			m_playing.erase(erased);
@@ -367,7 +367,7 @@ void CommunicationPlayer::Stop(const CommPlayID& playID)
 
 		CleanUpPlayState(playID, playState);
 
-		if (gAIEnv.CVars.DebugDrawCommunication == 5)
+		if (gAIEnv.CVars.legacyCommunicationSystem.DebugDrawCommunication == 5)
 		{
 			CryLogAlways("CommunicationPlayer finished playing: %s[%u] as playID[%u]", gAIEnv.pCommunicationManager->GetCommunicationName(playState.commID), playState.commID.id, it->first.id);
 		}

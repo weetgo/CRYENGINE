@@ -1,13 +1,14 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
 #include <vector>
-#include <yasli/Config.h>
+#include <CrySerialization/yasli/Config.h>
 #include <CrySerialization/Forward.h>
 
 struct ITagSource
 {
+	virtual ~ITagSource() {}
 	virtual void         AddRef() = 0;
 	virtual void         Release() = 0;
 	virtual unsigned int TagCount(unsigned int group) const = 0;

@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "stdafx.h"
 #include "OperatorQueue.h"
@@ -14,10 +14,12 @@ CRYREGISTER_CLASS(COperatorQueue)
 //
 
 COperatorQueue::COperatorQueue()
+	: m_ops()
+	, m_current(0)
+	, m_lastPushFrameId(0)
 {
 	m_ops[0].reserve(8);
 	m_ops[1].reserve(8);
-	m_current = 0;
 };
 
 //
@@ -32,7 +34,7 @@ void COperatorQueue::PushPosition(uint32 jointIndex, EOp eOp, const Vec3& value)
 	op.value.n[1] = value.y;
 	op.value.n[2] = value.z;
 	op.value.n[3] = 0.0f;
-	m_ops[m_current].push_back(op);
+	PushOp(op);
 }
 
 void COperatorQueue::PushOrientation(uint32 jointIndex, EOp eOp, const Quat& value)
@@ -45,7 +47,7 @@ void COperatorQueue::PushOrientation(uint32 jointIndex, EOp eOp, const Quat& val
 	op.value.n[1] = value.v.y;
 	op.value.n[2] = value.v.z;
 	op.value.n[3] = value.w;
-	m_ops[m_current].push_back(op);
+	PushOp(op);
 }
 
 void COperatorQueue::PushStoreRelative(uint32 jointIndex, QuatT& output)
@@ -56,7 +58,7 @@ void COperatorQueue::PushStoreRelative(uint32 jointIndex, QuatT& output)
 	// NOTE: A direct pointer is stored for now. This should be ideally
 	// double-buffered and updated upon syncing.
 	op.value.p = &output;
-	m_ops[m_current].push_back(op);
+	PushOp(op);
 }
 
 void COperatorQueue::PushStoreAbsolute(uint32 jointIndex, QuatT& output)
@@ -67,7 +69,7 @@ void COperatorQueue::PushStoreAbsolute(uint32 jointIndex, QuatT& output)
 	// NOTE: A direct pointer is stored for now. This should be ideally
 	// double-buffered and updated upon syncing.
 	op.value.p = &output;
-	m_ops[m_current].push_back(op);
+	PushOp(op);
 }
 
 void COperatorQueue::PushStoreWorld(uint32 jointIndex, QuatT& output)
@@ -78,7 +80,7 @@ void COperatorQueue::PushStoreWorld(uint32 jointIndex, QuatT& output)
 	// NOTE: A direct pointer is stored for now. This should be ideally
 	// double-buffered and updated upon syncing.
 	op.value.p = &output;
-	m_ops[m_current].push_back(op);
+	PushOp(op);
 }
 
 void COperatorQueue::PushComputeAbsolute()
@@ -86,7 +88,7 @@ void COperatorQueue::PushComputeAbsolute()
 	OperatorQueue::SOp op;
 	op.joint = 0;
 	op.op = eOpInternal_ComputeAbsolute;
-	m_ops[m_current].push_back(op);
+	PushOp(op);
 }
 
 void COperatorQueue::Clear()
@@ -105,18 +107,18 @@ bool COperatorQueue::Prepare(const SAnimationPoseModifierParams& params)
 
 bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 {
-	//	- Store direct pointer to reduce base pointer lookups
-	IAnimationPoseData* pParamsPoseData = params.pPoseData;
+	DEFINE_PROFILER_FUNCTION();
 
-	Skeleton::CPoseData* pPoseData = Skeleton::CPoseData::GetPoseData(pParamsPoseData);
-	const CDefaultSkeleton& rDefaultSkeleton = (const CDefaultSkeleton&)params.GetIDefaultSkeleton();
+	const CDefaultSkeleton& defaultSkeleton = PoseModifierHelper::GetDefaultSkeleton(params);
 
-	pPoseData->ComputeAbsolutePose(rDefaultSkeleton);
+	Skeleton::CPoseData* pPoseData = Skeleton::CPoseData::GetPoseData(params.pPoseData);
 
-	uint32 jointCount = pParamsPoseData->GetJointCount();
+	pPoseData->ComputeAbsolutePose(defaultSkeleton);
+
+	const uint32 jointCount = pPoseData->GetJointCount();
 
 	const std::vector<OperatorQueue::SOp>& ops = m_ops[(m_current + 1) & 1];
-	uint32 opCount = uint32(ops.size());
+	const uint32 opCount = uint32(ops.size());
 	for (uint32 i = 0; i < opCount; ++i)
 	{
 		// - Use copy instead of reference
@@ -129,7 +131,7 @@ bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 		const bool lastOperator = (i == opCount - 1);
 
 		//	- Lookup id regardless if needed (adds runtime cost)
-		int32 parent = rDefaultSkeleton.GetJointParentIDByID(op.joint);
+		int32 parent = defaultSkeleton.GetJointParentIDByID(op.joint);
 
 		switch (op.op)
 		{
@@ -138,26 +140,24 @@ bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 				switch (op.target)
 				{
 				case eTarget_Position:
-					pParamsPoseData->SetJointAbsoluteP(jointIndex, Vec3(op.value.n[0], op.value.n[1], op.value.n[2]));
+					pPoseData->SetJointAbsoluteP(jointIndex, Vec3(op.value.n[0], op.value.n[1], op.value.n[2]));
 					break;
 
 				case eTarget_Orientation:
-					pParamsPoseData->SetJointAbsoluteO(jointIndex, Quat(op.value.n[3], op.value.n[0], op.value.n[1], op.value.n[2]));
+					pPoseData->SetJointAbsoluteO(jointIndex, Quat(op.value.n[3], op.value.n[0], op.value.n[1], op.value.n[2]));
 					break;
 				}
 
 				if (parent < 0)
 				{
-					pParamsPoseData->SetJointRelative(jointIndex, pParamsPoseData->GetJointAbsolute(jointIndex));
+					pPoseData->SetJointRelative(jointIndex, pPoseData->GetJointAbsolute(jointIndex));
 					continue;
 				}
-				pParamsPoseData->SetJointRelative(jointIndex,
-				                                  pParamsPoseData->GetJointAbsolute(parent).GetInverted() *
-				                                  pParamsPoseData->GetJointAbsolute(jointIndex));
+				pPoseData->SetJointRelative(jointIndex, pPoseData->GetJointAbsolute(parent).GetInverted() * pPoseData->GetJointAbsolute(jointIndex));
 
 				if (!lastOperator)
 				{
-					PoseModifierHelper::ComputeAbsoluteTransformation(params, jointIndex);
+					PoseModifierHelper::ComputeJointChildrenAbsolute(defaultSkeleton, *pPoseData, jointIndex);
 				}
 				break;
 			}
@@ -167,26 +167,24 @@ bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 				switch (op.target)
 				{
 				case eTarget_Position:
-					params.pPoseData->SetJointAbsoluteP(jointIndex, (Vec3(op.value.n[0], op.value.n[1], op.value.n[2]) - params.location.t) * params.location.q);
+					pPoseData->SetJointAbsoluteP(jointIndex, (Vec3(op.value.n[0], op.value.n[1], op.value.n[2]) - params.location.t) * params.location.q);
 					break;
 
 				case eTarget_Orientation:
-					params.pPoseData->SetJointAbsoluteO(jointIndex, params.location.q.GetInverted() * Quat(op.value.n[3], op.value.n[0], op.value.n[1], op.value.n[2]));
+					pPoseData->SetJointAbsoluteO(jointIndex, params.location.q.GetInverted() * Quat(op.value.n[3], op.value.n[0], op.value.n[1], op.value.n[2]));
 					break;
 				}
 
 				if (parent < 0)
 				{
-					params.pPoseData->SetJointRelative(jointIndex, params.pPoseData->GetJointAbsolute(jointIndex));
+					pPoseData->SetJointRelative(jointIndex, pPoseData->GetJointAbsolute(jointIndex));
 					continue;
 				}
-				params.pPoseData->SetJointRelative(jointIndex,
-				                                   params.pPoseData->GetJointAbsolute(parent).GetInverted() *
-				                                   params.pPoseData->GetJointAbsolute(jointIndex));
+				pPoseData->SetJointRelative(jointIndex, pPoseData->GetJointAbsolute(parent).GetInverted() * pPoseData->GetJointAbsolute(jointIndex));
 
 				if (!lastOperator)
 				{
-					PoseModifierHelper::ComputeAbsoluteTransformation(params, jointIndex);
+					PoseModifierHelper::ComputeJointChildrenAbsolute(defaultSkeleton, *pPoseData, jointIndex);
 				}
 
 				break;
@@ -197,26 +195,24 @@ bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 				switch (op.target)
 				{
 				case eTarget_Position:
-					pParamsPoseData->SetJointRelativeP(jointIndex, Vec3(op.value.n[0], op.value.n[1], op.value.n[2]));
+					pPoseData->SetJointRelativeP(jointIndex, Vec3(op.value.n[0], op.value.n[1], op.value.n[2]));
 					break;
 
 				case eTarget_Orientation:
-					pParamsPoseData->SetJointRelativeO(jointIndex, Quat(op.value.n[3], op.value.n[0], op.value.n[1], op.value.n[2]));
+					pPoseData->SetJointRelativeO(jointIndex, Quat(op.value.n[3], op.value.n[0], op.value.n[1], op.value.n[2]));
 					break;
 				}
 
 				if (parent < 0)
 				{
-					pParamsPoseData->SetJointAbsolute(jointIndex, pParamsPoseData->GetJointRelative(jointIndex));
+					pPoseData->SetJointAbsolute(jointIndex, pPoseData->GetJointRelative(jointIndex));
 					continue;
 				}
-				pParamsPoseData->SetJointAbsolute(jointIndex,
-				                                  pParamsPoseData->GetJointAbsolute(parent) *
-				                                  pParamsPoseData->GetJointRelative(jointIndex));
+				pPoseData->SetJointAbsolute(jointIndex, pPoseData->GetJointAbsolute(parent) * pPoseData->GetJointRelative(jointIndex));
 
 				if (!lastOperator)
 				{
-					PoseModifierHelper::ComputeAbsoluteTransformation(params, jointIndex);
+					PoseModifierHelper::ComputeJointChildrenAbsolute(defaultSkeleton, *pPoseData, jointIndex);
 				}
 				break;
 			}
@@ -226,30 +222,26 @@ bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 				switch (op.target)
 				{
 				case eTarget_Position:
-					pParamsPoseData->SetJointAbsoluteP(jointIndex,
-					                                   pParamsPoseData->GetJointAbsolute(jointIndex).t +
-					                                   Vec3(op.value.n[0], op.value.n[1], op.value.n[2]));
+					pPoseData->SetJointAbsoluteP(jointIndex, pPoseData->GetJointAbsolute(jointIndex).t + Vec3(op.value.n[0], op.value.n[1], op.value.n[2]));
 					break;
 
 				case eTarget_Orientation:
 					const Quat newRot(op.value.n[3], op.value.n[0], op.value.n[1], op.value.n[2]);
-					pParamsPoseData->SetJointAbsoluteO(jointIndex, newRot * pParamsPoseData->GetJointAbsolute(jointIndex).q);
+					pPoseData->SetJointAbsoluteO(jointIndex, newRot * pPoseData->GetJointAbsolute(jointIndex).q);
 					break;
 				}
 
 				if (parent < 0)
 				{
-					pParamsPoseData->SetJointRelative(jointIndex, pParamsPoseData->GetJointAbsolute(jointIndex));
+					pPoseData->SetJointRelative(jointIndex, pPoseData->GetJointAbsolute(jointIndex));
 					continue;
 				}
 
-				pParamsPoseData->SetJointRelative(jointIndex,
-				                                  pParamsPoseData->GetJointAbsolute(parent).GetInverted() *
-				                                  pParamsPoseData->GetJointAbsolute(jointIndex));
+				pPoseData->SetJointRelative(jointIndex, pPoseData->GetJointAbsolute(parent).GetInverted() * pPoseData->GetJointAbsolute(jointIndex));
 
 				if (!lastOperator)
 				{
-					PoseModifierHelper::ComputeAbsoluteTransformation(params, jointIndex);
+					PoseModifierHelper::ComputeJointChildrenAbsolute(defaultSkeleton, *pPoseData, jointIndex);
 				}
 				break;
 			}
@@ -259,49 +251,45 @@ bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 				switch (op.target)
 				{
 				case eTarget_Position:
-					pParamsPoseData->SetJointRelativeP(jointIndex,
-					                                   pParamsPoseData->GetJointRelative(jointIndex).t +
-					                                   Vec3(op.value.n[0], op.value.n[1], op.value.n[2]));
+					pPoseData->SetJointRelativeP(jointIndex, pPoseData->GetJointRelative(jointIndex).t + Vec3(op.value.n[0], op.value.n[1], op.value.n[2]));
 					break;
 
 				case eTarget_Orientation:
 					const Quat newRot(op.value.n[3], op.value.n[0], op.value.n[1], op.value.n[2]);
-					pParamsPoseData->SetJointRelativeO(jointIndex, newRot * pParamsPoseData->GetJointRelative(jointIndex).q);
+					pPoseData->SetJointRelativeO(jointIndex, newRot * pPoseData->GetJointRelative(jointIndex).q);
 					break;
 				}
 
 				if (parent < 0)
 				{
-					pParamsPoseData->SetJointAbsolute(jointIndex, pParamsPoseData->GetJointRelative(jointIndex));
+					pPoseData->SetJointAbsolute(jointIndex, pPoseData->GetJointRelative(jointIndex));
 					continue;
 				}
 
-				pParamsPoseData->SetJointAbsolute(jointIndex,
-				                                  pParamsPoseData->GetJointAbsolute(parent) *
-				                                  pParamsPoseData->GetJointRelative(jointIndex));
+				pPoseData->SetJointAbsolute(jointIndex, pPoseData->GetJointAbsolute(parent) * pPoseData->GetJointRelative(jointIndex));
 
 				if (!lastOperator)
 				{
-					PoseModifierHelper::ComputeAbsoluteTransformation(params, jointIndex);
+					PoseModifierHelper::ComputeJointChildrenAbsolute(defaultSkeleton, *pPoseData, jointIndex);
 				}
 				break;
 			}
 
 		case eOpInternal_StoreRelative:
 			{
-				*op.value.p = pParamsPoseData->GetJointRelative(op.joint);
+				*op.value.p = pPoseData->GetJointRelative(op.joint);
 				break;
 			}
 
 		case eOpInternal_StoreAbsolute:
 			{
-				*op.value.p = pParamsPoseData->GetJointAbsolute(op.joint);
+				*op.value.p = pPoseData->GetJointAbsolute(op.joint);
 				break;
 			}
 
 		case eOpInternal_StoreWorld:
 			{
-				*op.value.p = QuatT(params.location * params.pPoseData->GetJointAbsolute(op.joint));
+				*op.value.p = QuatT(params.location * pPoseData->GetJointAbsolute(op.joint));
 				break;
 			}
 
@@ -311,7 +299,7 @@ bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 				{
 					// TEMP: For now we implicitly always compute the absolute
 					// pose, avoid doing so twice.
-					pPoseData->ComputeAbsolutePose(rDefaultSkeleton);
+					pPoseData->ComputeAbsolutePose(defaultSkeleton);
 				}
 				break;
 			}
@@ -324,4 +312,17 @@ bool COperatorQueue::Execute(const SAnimationPoseModifierParams& params)
 void COperatorQueue::Synchronize()
 {
 	m_ops[(m_current + 1) & 1].clear();
+}
+
+void COperatorQueue::PushOp(OperatorQueue::SOp op)
+{
+	if (m_lastPushFrameId != gEnv->nMainFrameID)
+	{
+		// This is an emergency cleanup step introduced to prevent operations from being accumulated over multiple frames when the pose modifier is not being executed.
+		// It can happen, for example, when animation updates are being culled by the engine while the game code driving this COperatorQueue is not aware of it and continues to push operations.
+		m_lastPushFrameId = gEnv->nMainFrameID;
+		m_ops[m_current].clear();
+	}
+
+	m_ops[m_current].push_back(op);
 }

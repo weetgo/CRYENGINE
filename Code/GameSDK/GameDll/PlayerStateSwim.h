@@ -1,8 +1,9 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
 #include "Audio/AudioSignalPlayer.h"
+#include <IItemSystem.h>
 
 struct SActorFrameMovementParams;
 class CPlayer;
@@ -33,7 +34,7 @@ private:
 	float m_headUnderWaterTimer;
 	bool m_onSurface;
 	bool m_bStillDiving;
-	static AudioControlId m_submersionDepthParam;
+	static CryAudio::ControlId m_submersionDepthParam;
 	static float m_previousSubmersionDepth;
 
 	struct CSwimmingParams

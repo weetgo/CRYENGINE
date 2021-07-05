@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "Game.h"
@@ -717,7 +717,7 @@ private:
 		RegisterWeapon(currItemId);
 		m_bEnabled = true;
 
-		gEnv->pSystem->GetISystemEventDispatcher()->RegisterListener(this);
+		gEnv->pSystem->GetISystemEventDispatcher()->RegisterListener(this, "CFlowNode_WeaponSensor");
 	}
 
 	void Disable()
@@ -1112,10 +1112,10 @@ public:
 
 		observerParams.callback = functor(*this, &CFlowNode_ActorVisualDetector::CallBackViewChanged);
 
-		observerParams.typeMask = Player;
+		observerParams.typesToObserveMask = Player;
 		EntityId entityToLookFor = GetPortEntityId(&m_actInfo, INP_ENTITY_TO_LOOK_FOR);
 		if (entityToLookFor != gEnv->pGameFramework->GetClientActor()->GetEntityId())
-			observerParams.typeMask |= AliveAgent | General;
+			observerParams.typesToObserveMask |= AliveAgent | General;
 
 		observerParams.skipList[0] = pObserverEntity->GetPhysics();
 		observerParams.skipListSize = pObserverEntity->GetPhysics() ? 1 : 0;
@@ -1186,7 +1186,7 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////
 	// IEntityEventListener
-	virtual void OnEntityEvent(IEntity* pEntity, SEntityEvent& event)
+	virtual void OnEntityEvent(IEntity* pEntity, const SEntityEvent& event)
 	{
 		if (m_enabled && event.event == ENTITY_EVENT_XFORM)
 		{
@@ -1733,11 +1733,13 @@ public:
 	virtual void OnActionEvent(const SActionEvent& event) {}
 	virtual void OnPostUpdate(float fDelta)
 	{
+		const CCamera& camera = GetISystem()->GetViewCamera();
+
 		const float px = GetPortFloat(&m_actInfo, EIP_PX);
 		const float py = GetPortFloat(&m_actInfo, EIP_PY);
 		const float depth = GetPortFloat(&m_actInfo, EIP_DEPTH);
 
-		const Vec2 vViewportCoords(px * gEnv->pRenderer->GetWidth(), gEnv->pRenderer->GetHeight() - py * gEnv->pRenderer->GetHeight());
+		const Vec2 vViewportCoords(px * camera.GetViewSurfaceX(), camera.GetViewSurfaceZ() - py * gEnv->pRenderer->GetHeight());
 
 		Vec3 vPos0(0, 0, 0);
 		gEnv->pRenderer->UnProjectFromScreen(vViewportCoords.x, vViewportCoords.y, 0, &vPos0.x, &vPos0.y, &vPos0.z);

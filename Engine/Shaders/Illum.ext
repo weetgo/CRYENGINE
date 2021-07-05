@@ -71,6 +71,14 @@ Property
 
 Property
 {
+  Name = %BILLBOARD
+  Mask = 0x2000
+  Property    (Billboard)
+  Description (Rotate geometry towards camera)
+}
+
+Property
+{
   Name = %DECAL
   Mask = 0x2000000
   Property    (Decal)
@@ -146,15 +154,6 @@ Property
   Property    (Silhouette POM)
   Description (Parallax occlusion mapping with silhouette (requires height map (_displ)))
   DependencyReset = $TEX_Normals
-}
-
-Property
-{
-  Name = %ALLOW_SILHOUETTE_POM
-  Mask = 0x40000
-  DependencySet = $HW_SilhouettePom
-  DependencyReset = $HW_SilhouettePom
-  Hidden
 }
 
 Property

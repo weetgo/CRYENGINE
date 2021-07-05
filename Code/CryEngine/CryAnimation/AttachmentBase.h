@@ -1,8 +1,9 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
 #include "Skeleton.h"
+#include <CryAnimation/IAttachment.h>
 
 class CAttachmentManager;
 
@@ -16,6 +17,9 @@ struct SAttachmentBase : public IAttachment
 		, m_pAttachmentManager(nullptr)
 	{
 	}
+
+	virtual void AddRef() = 0;
+	virtual void Release() = 0;
 
 	// these functions will queue commands in the attachment manager
 	// and they are exposed in the interface, since they are safe

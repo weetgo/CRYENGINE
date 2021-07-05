@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "Config.h"
@@ -80,6 +80,8 @@ string GetEventName(ENetObjectEvent evt)
 		return "ChangeContext";
 	case eNOE_EstablishedContext:
 		return "EstablishedContext";
+	case eNOE_StartedEstablishingContext:
+		return "StartedEstablishingContext";
 	case eNOE_ReconfiguredObject:
 		return "ReconfiguredObject";
 	case eNOE_BindAspects:
@@ -121,7 +123,6 @@ CNetContext::CNetContext(IGameContext* pGameContext, uint32 flags) :
 	m_delegatableAspects(0),
 	m_regularlyUpdatedAspects(0),
 	m_serverManagedProfileAspects(0),
-	m_hashAspects(0),
 	m_timestampedAspects(0),
 	m_disabledCompressionAspects(0),
 	m_pGameContext(pGameContext),
@@ -211,6 +212,8 @@ void CNetContext::Die()
 
 	m_pState->Die();
 
+	CNetwork::Get()->GetCompressionManager().Reset(false, true);
+
 	m_bDead = true;
 }
 
@@ -224,9 +227,7 @@ void CNetContext::SetSessionID(const CSessionID& id)
 CNetContext::~CNetContext()
 {
 	SCOPED_GLOBAL_LOCK;
-	TIMER.CancelTimer(m_backgroundPassthrough);
 
-	CNetwork::Get()->GetCompressionManager().Reset(false, true);
 	--g_objcnt.netContext;
 
 	NET_PROFILE_SHUTDOWN();
@@ -290,7 +291,7 @@ void CNetContext::ActivateDemoPlayback(const char* filename, INetChannel* pClien
 void CNetContext::SyncWithGame(ENetworkGameSync type)
 {
 	ASSERT_GLOBAL_LOCK;
-	FUNCTION_PROFILER(GetISystem(), PROFILE_NETWORK);
+	CRY_PROFILE_FUNCTION(PROFILE_NETWORK);
 	ENSURE_REALTIME;
 
 	SNetObjectEvent syncEvent;
@@ -370,8 +371,6 @@ void CNetContext::DeclareAspect(const char* name, NetworkAspectType aspectBit, u
 		m_delegatableAspects |= aspectBit;
 	if (aspectFlags & eAF_ServerManagedProfile)
 		m_serverManagedProfileAspects |= aspectBit;
-	if (aspectFlags & eAF_HashState)
-		m_hashAspects |= aspectBit;
 	if (aspectFlags & eAF_TimestampState)
 		m_timestampedAspects |= aspectBit;
 	if (aspectFlags & eAF_NoCompression)
@@ -392,6 +391,14 @@ bool CNetContext::ChangeContext()
 	m_pState = pNewState;
 	TO_GAME_LAZY(&CNetContextState::GC_BeginContext, &*m_pState, g_time);
 	return true;
+}
+
+void CNetContext::StartedEstablishingContext(int establishToken)
+{
+	SCOPED_GLOBAL_LOCK;
+	if (m_pState->GetToken() != establishToken)
+		return;
+	m_pState->StartedEstablishingContext();
 }
 
 void CNetContext::EstablishedContext(int establishToken)

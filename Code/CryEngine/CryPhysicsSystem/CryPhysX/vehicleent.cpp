@@ -1,3 +1,5 @@
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
+
 #include "StdAfx.h"
 
 #include "geometries.h"
@@ -51,7 +53,6 @@ int PhysXVehicle::AddGeometry(phys_geometry* pgeom, pe_geomparams* _params, int 
 int PhysXVehicle::SetParams(pe_params* _params, int bThreadSafe)
 {
 	if (_params->type==pe_params_wheel::type_id) {
-		pe_params_wheel *params = (pe_params_wheel*)_params;
 		return 1;
 	}	else
 		SetupPxVehicle();
@@ -154,6 +155,7 @@ bool PhysXVehicle::SetupPxVehicle()
 		return false;
 	if (m_vehicle)
 		return true;
+
 	int nwheels=m_wheels.size(), driveMask=0;
 	m_vehicle = PxVehicleDrive4W::allocate(nwheels);
 	PxVehicleWheelsSimData *wsd = PxVehicleWheelsSimData::allocate(nwheels);

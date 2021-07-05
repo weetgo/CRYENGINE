@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 //
 ////////////////////////////////////////////////////////////////////////////
@@ -65,7 +65,7 @@ public:
 
 	virtual bool IsScopeActive(uint32 scopeID) const override
 	{
-		CRY_ASSERT_MESSAGE((scopeID < m_scopeCount), "Invalid scope id");
+		CRY_ASSERT((scopeID < m_scopeCount), "Invalid scope id");
 
 		return ((m_activeScopes & BIT64(scopeID)) != 0);
 	}
@@ -188,10 +188,10 @@ public:
 	virtual void                      RegisterListener(IMannequinListener* listener) override;
 	virtual void                      UnregisterListener(IMannequinListener* listener) override;
 
-	virtual IProceduralContext*       FindOrCreateProceduralContext(const char* contextName) override;
-	virtual const IProceduralContext* FindProceduralContext(const char* contextName) const override;
-	virtual IProceduralContext*       FindProceduralContext(const char* contextName) override;
-	virtual IProceduralContext*       CreateProceduralContext(const char* contextName) override;
+	virtual IProceduralContext*       FindOrCreateProceduralContext(const CryClassID& contextId) override;
+	virtual const IProceduralContext* FindProceduralContext(const CryClassID& contextId) const override;
+	virtual IProceduralContext*       FindProceduralContext(const CryClassID& contextId) override;
+	virtual IProceduralContext*       CreateProceduralContext(const CryClassID& contextId) override;
 
 	virtual QuatT                     ExtractLocalAnimLocation(FragmentID fragID, TagState fragTags, uint32 scopeID, uint32 optionIdx) override;
 
@@ -254,8 +254,6 @@ public:
 		CRY_ASSERT(pEntity);
 		return pEntity ? pEntity->GetName() : "invalid";
 	}
-
-	IProceduralContext* FindProceduralContext(uint32 contextNameCRC) const;
 
 	void                OnEntityReturnedToPool(EntityId entityId, IEntity* pEntity);
 
@@ -338,7 +336,7 @@ private:
 
 	struct SProcContext
 	{
-		uint32                              nameCRC;
+		CryClassID contextId;
 		std::shared_ptr<IProceduralContext> pContext;
 	};
 	std::vector<SProcContext> m_procContexts;

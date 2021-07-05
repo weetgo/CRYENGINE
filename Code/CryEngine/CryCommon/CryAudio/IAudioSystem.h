@@ -1,9 +1,10 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
 #include "IAudioInterfacesCommonData.h"
-#include <CryCore/Platform/platform.h>
+#include "../CrySystem/IEngineModule.h"
+#include "../CryEntitySystem/IEntityBasicTypes.h"
 
 // General macros.
 //#define ENABLE_AUDIO_PORT_MESSAGES
@@ -20,822 +21,565 @@
 	#define REINST(y)
 #endif
 
-//! \note We need this explicit here to prevent circular includes to IEntity.
-//! Unique identifier for each entity instance.
-typedef unsigned int EntityId;
+class XmlNodeRef;
 
-// Forward declarations.
-struct IVisArea;
-struct ICVar;
-class CAudioRayInfo;
-
+/**
+ * @namespace CryAudio
+ * @brief Most parent audio namespace used throughout the entire engine.
+ */
 namespace CryAudio
 {
+// Forward declarations.
+struct IObject;
+struct IListener;
+
 namespace Impl
 {
-struct IAudioImpl;
-}
-}
+struct IImpl;
+struct IObject;
+struct ITriggerInfo;
+} // namespace Impl
 
-enum EAudioDataScope : AudioEnumFlagsType
+/**
+ * @enum CryAudio::ESystemEvents
+ * @brief A strongly typed enum class representing different audio system events that can be listened to.
+ * @var CryAudio::ESystemEvents::None
+ * @var CryAudio::ESystemEvents::ImplSet
+ * @var CryAudio::ESystemEvents::TriggerExecuted
+ * @var CryAudio::ESystemEvents::TriggerFinished
+ * @var CryAudio::ESystemEvents::PreloadFinishedSuccess
+ * @var CryAudio::ESystemEvents::PreloadFinishedFailure
+ * @var CryAudio::ESystemEvents::ContextActivated
+ * @var CryAudio::ESystemEvents::ContextDeactivated
+ * @var CryAudio::ESystemEvents::OnBar
+ * @var CryAudio::ESystemEvents::OnBeat
+ * @var CryAudio::ESystemEvents::OnEntry
+ * @var CryAudio::ESystemEvents::OnExit
+ * @var CryAudio::ESystemEvents::OnGrid
+ * @var CryAudio::ESystemEvents::OnSyncPoint
+ * @var CryAudio::ESystemEvents::OnUserMarker
+ */
+enum class ESystemEvents : EnumFlagsType
 {
-	eAudioDataScope_None,
-	eAudioDataScope_Global,
-	eAudioDataScope_LevelSpecific,
-	eAudioDataScope_All,
+	None                   = 0,              /**< Used to initialize variables of this type and to determine whether the variable was properly handled. */
+	ImplSet                = BIT(0),         /**< Invoked once the audio middleware implementation has been set. */
+	TriggerExecuted        = BIT(1),         /**< Invoked once a trigger finished starting all of its event connections. */
+	TriggerFinished        = BIT(2),         /**< Invoked once all of the spawned event instances finished playing. */
+	PreloadFinishedSuccess = BIT(3),         /**< Invoked once a preload finished loading successfully. */
+	PreloadFinishedFailure = BIT(4),         /**< Invoked once a preload failed to finish loading or was only partially successful. */
+	ContextActivated       = BIT(5),         /**< Invoked once a context got activated. */
+	ContextDeactivated     = BIT(6),         /**< Invoked once a context got deactivated. */
+	OnBar                  = BIT(7),         /**< Invoked on every music bar if supported by the used middleware. */
+	OnBeat                 = BIT(8),         /**< Invoked on every music beat if supported by the used middleware. */
+	OnEntry                = BIT(9),         /**< Invoked on music entry point if supported by the used middleware. */
+	OnExit                 = BIT(10),        /**< Invoked on music exit point if supported by the used middleware. */
+	OnGrid                 = BIT(11),        /**< Invoked on every music grid if supported by the used middleware. */
+	OnSyncPoint            = BIT(12),        /**< Invoked on every synchronization point if supported by the used middleware. */
+	OnUserMarker           = BIT(13),        /**< Invoked on every user marker if supported by the used middleware. */
+};
+CRY_CREATE_ENUM_FLAG_OPERATORS(ESystemEvents);
+
+/**
+ * @enum CryAudio::ELogType
+ * @brief A strongly typed enum class representing different audio specific log types.
+ * @var CryAudio::ELogType::None
+ * @var CryAudio::ELogType::Comment
+ * @var CryAudio::ELogType::Warning
+ * @var CryAudio::ELogType::Error
+ * @var CryAudio::ELogType::Always
+ */
+enum class ELogType : EnumFlagsType
+{
+	None,    /**< Used to initialize variables of this type and to determine whether the variable was properly handled. */
+	Comment, /**< The message will be displayed in standard color but verbosity level must be set to at least 4. */
+	Warning, /**< The message will be displayed in orange color. */
+	Error,   /**< The message will be displayed in red color. */
+	Always,  /**< The message will be displayed in standard color and always printed regardless of verbosity level. */
 };
 
-enum EAudioManagerRequestType : AudioEnumFlagsType
+/**
+ * @enum CryAudio::EDefaultTriggerType
+ * @brief A strongly typed enum class representing different default audio trigger types.
+ * @var CryAudio::EDefaultTriggerType::None
+ * @var CryAudio::EDefaultTriggerType::LoseFocus
+ * @var CryAudio::EDefaultTriggerType::GetFocus
+ * @var CryAudio::EDefaultTriggerType::MuteAll
+ * @var CryAudio::EDefaultTriggerType::UnmuteAll
+ * @var CryAudio::EDefaultTriggerType::PauseAll
+ * @var CryAudio::EDefaultTriggerType::ResumeAll
+ */
+enum class EDefaultTriggerType : EnumFlagsType
 {
-	eAudioManagerRequestType_None                   = 0,
-	eAudioManagerRequestType_SetAudioImpl           = BIT(0),
-	eAudioManagerRequestType_ReleaseAudioImpl       = BIT(1),
-	eAudioManagerRequestType_RefreshAudioSystem     = BIT(2),
-	eAudioManagerRequestType_ReserveAudioObjectId   = BIT(3),
-	eAudioManagerRequestType_LoseFocus              = BIT(4),
-	eAudioManagerRequestType_GetFocus               = BIT(5),
-	eAudioManagerRequestType_MuteAll                = BIT(6),
-	eAudioManagerRequestType_UnmuteAll              = BIT(7),
-	eAudioManagerRequestType_StopAllSounds          = BIT(8),
-	eAudioManagerRequestType_ParseControlsData      = BIT(9),
-	eAudioManagerRequestType_ParsePreloadsData      = BIT(10),
-	eAudioManagerRequestType_ClearControlsData      = BIT(11),
-	eAudioManagerRequestType_ClearPreloadsData      = BIT(12),
-	eAudioManagerRequestType_PreloadSingleRequest   = BIT(13),
-	eAudioManagerRequestType_UnloadSingleRequest    = BIT(14),
-	eAudioManagerRequestType_UnloadAFCMDataByScope  = BIT(15),
-	eAudioManagerRequestType_DrawDebugInfo          = BIT(16), //!< Only used internally!
-	eAudioManagerRequestType_AddRequestListener     = BIT(17),
-	eAudioManagerRequestType_RemoveRequestListener  = BIT(18),
-	eAudioManagerRequestType_ChangeLanguage         = BIT(19),
-	eAudioManagerRequestType_RetriggerAudioControls = BIT(20),
-	eAudioManagerRequestType_ReleasePendingRays     = BIT(21), //!< Only used internally!
-	eAudioManagerRequestType_ReloadControlsData     = BIT(22),
-	eAudioManagerRequestType_GetAudioFileData       = BIT(23), //!< Only used internally!
+	None,      /**< Used to initialize variables of this type and to determine whether the variable was properly handled. */
+	LoseFocus, /**< Specifies to use the lose_focus default trigger. */
+	GetFocus,  /**< Specifies to use the get_focus default trigger. */
+	MuteAll,   /**< Specifies to use the mute_all default trigger. */
+	UnmuteAll, /**< Specifies to use the unmute_all default trigger. */
+	PauseAll,  /**< Specifies to use the pause_all default trigger. */
+	ResumeAll, /**< Specifies to use the resume_all default trigger. */
 };
 
-enum EAudioCallbackManagerRequestType : AudioEnumFlagsType
+struct SRequestInfo
 {
-	eAudioCallbackManagerRequestType_None                          = 0,
-	eAudioCallbackManagerRequestType_ReportStartedEvent            = BIT(0), //!< Only relevant for delayed playback.
-	eAudioCallbackManagerRequestType_ReportFinishedEvent           = BIT(1), //!< Only used internally!
-	eAudioCallbackManagerRequestType_ReportFinishedTriggerInstance = BIT(2), //!< Only used internally!
-	eAudioCallbackManagerRequestType_ReportStartedFile             = BIT(3), //!< Only used internally!
-	eAudioCallbackManagerRequestType_ReportStoppedFile             = BIT(4), //!< Only used internally!
-	eAudioCallbackManagerRequestType_ReportVirtualizedEvent        = BIT(5), //!< Only used internally!
-	eAudioCallbackManagerRequestType_ReportPhysicalizedEvent       = BIT(6), //!< Only used internally!
+	explicit SRequestInfo(
+		ERequestResult const requestResult_,
+		void* const pOwner_,
+		void* const pUserData_,
+		void* const pUserDataOwner_,
+		ESystemEvents const systemEvent_,
+		ControlId const audioControlId_,
+		EntityId const entityId_)
+		: pOwner(pOwner_)
+		, pUserData(pUserData_)
+		, pUserDataOwner(pUserDataOwner_)
+		, requestResult(requestResult_)
+		, systemEvent(systemEvent_)
+		, audioControlId(audioControlId_)
+		, entityId(entityId_)
+	{}
+
+	SRequestInfo(SRequestInfo const&) = delete;
+	SRequestInfo(SRequestInfo&&) = delete;
+	SRequestInfo& operator=(SRequestInfo const&) = delete;
+	SRequestInfo& operator=(SRequestInfo&&) = delete;
+
+	void* const          pOwner;
+	void* const          pUserData;
+	void* const          pUserDataOwner;
+	ERequestResult const requestResult;
+	ESystemEvents const  systemEvent;
+	ControlId const      audioControlId;
+	EntityId const       entityId;
 };
 
-enum EAudioListenerRequestType : AudioEnumFlagsType
+struct SCreateObjectData
 {
-	eAudioListenerRequestType_None              = 0,
-	eAudioListenerRequestType_SetTransformation = BIT(0),
-};
-
-enum EAudioObjectRequestType : AudioEnumFlagsType
-{
-	eAudioObjectRequestType_None                 = 0,
-	eAudioObjectRequestType_PrepareTrigger       = BIT(0),
-	eAudioObjectRequestType_UnprepareTrigger     = BIT(1),
-	eAudioObjectRequestType_PlayFile             = BIT(2),
-	eAudioObjectRequestType_StopFile             = BIT(3),
-	eAudioObjectRequestType_ExecuteTrigger       = BIT(4),
-	eAudioObjectRequestType_StopTrigger          = BIT(5),
-	eAudioObjectRequestType_StopAllTriggers      = BIT(6),
-	eAudioObjectRequestType_SetTransformation    = BIT(7),
-	eAudioObjectRequestType_SetRtpcValue         = BIT(8),
-	eAudioObjectRequestType_SetSwitchState       = BIT(9),
-	eAudioObjectRequestType_SetVolume            = BIT(10),
-	eAudioObjectRequestType_SetEnvironmentAmount = BIT(11),
-	eAudioObjectRequestType_ResetEnvironments    = BIT(12),
-	eAudioObjectRequestType_ReleaseObject        = BIT(13),
-	eAudioObjectRequestType_ProcessPhysicsRay    = BIT(14), //!< Only used internally!
-};
-
-enum EAudioOcclusionType : AudioEnumFlagsType
-{
-	eAudioOcclusionType_None,
-	eAudioOcclusionType_Ignore,
-	eAudioOcclusionType_Adaptive,
-	eAudioOcclusionType_Low,
-	eAudioOcclusionType_Medium,
-	eAudioOcclusionType_High,
-
-	eAudioOcclusionType_Count,
-};
-AUTO_TYPE_INFO(EAudioOcclusionType);
-
-//////////////////////////////////////////////////////////////////////////
-struct SAudioManagerRequestDataBase : public SAudioRequestDataBase
-{
-	explicit SAudioManagerRequestDataBase(EAudioManagerRequestType const _type)
-		: SAudioRequestDataBase(eAudioRequestType_AudioManagerRequest)
-		, type(_type)
+	explicit SCreateObjectData(
+		char const* const szName_ = nullptr,
+		EOcclusionType const occlusionType_ = EOcclusionType::Ignore,
+		CTransformation const& transformation_ = CTransformation::GetEmptyObject(),
+		bool const setCurrentEnvironments_ = false)
+		: szName(szName_)
+		, occlusionType(occlusionType_)
+		, transformation(transformation_)
+		, setCurrentEnvironments(setCurrentEnvironments_)
+		, listenerIds{DefaultListenerId}
 	{}
 
-	virtual ~SAudioManagerRequestDataBase() override = default;
-
-	EAudioManagerRequestType const type;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<EAudioManagerRequestType T>
-struct SAudioManagerRequestData : public SAudioManagerRequestDataBase
-{
-	SAudioManagerRequestData()
-		: SAudioManagerRequestDataBase(T)
+	explicit SCreateObjectData(
+		char const* const szName_,
+		EOcclusionType const occlusionType_,
+		CTransformation const& transformation_,
+		bool const setCurrentEnvironments_,
+		ListenerIds const& listenerIds_)
+		: szName(szName_)
+		, occlusionType(occlusionType_)
+		, transformation(transformation_)
+		, setCurrentEnvironments(setCurrentEnvironments_)
+		, listenerIds(listenerIds_)
 	{}
 
-	virtual ~SAudioManagerRequestData() override = default;
-};
+	static SCreateObjectData const& GetEmptyObject() { static SCreateObjectData const emptyInstance; return emptyInstance; }
 
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_SetAudioImpl> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(CryAudio::Impl::IAudioImpl* const _pImpl)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_SetAudioImpl)
-		, pImpl(_pImpl)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	CryAudio::Impl::IAudioImpl* const pImpl;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_ReserveAudioObjectId> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(CATLAudioObject** const _ppAudioObject, char const* const _szAudioObjectName)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_ReserveAudioObjectId)
-		, ppAudioObject(_ppAudioObject)
-		, szAudioObjectName(_szAudioObjectName)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	CATLAudioObject** const ppAudioObject;
-	char const* const       szAudioObjectName;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_AddRequestListener> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(
-	  void const* const _pObjectToListenTo,
-	  void(*_func)(SAudioRequestInfo const* const),
-	  EAudioRequestType const _type,
-	  AudioEnumFlagsType _specificRequestMask)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_AddRequestListener)
-		, pObjectToListenTo(_pObjectToListenTo)
-		, func(_func)
-		, type(_type)
-		, specificRequestMask(_specificRequestMask)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	void const* const        pObjectToListenTo;
-	void                     (* func)(SAudioRequestInfo const* const);
-	EAudioRequestType const  type;
-	AudioEnumFlagsType const specificRequestMask;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_RemoveRequestListener> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(void const* const _pObjectToListenTo, void(*_func)(SAudioRequestInfo const* const))
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_RemoveRequestListener)
-		, pObjectToListenTo(_pObjectToListenTo)
-		, func(_func)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	void const* const pObjectToListenTo;
-	void              (* func)(SAudioRequestInfo const* const);
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_ParseControlsData> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(char const* const _szFolderPath, EAudioDataScope const _dataScope)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_ParseControlsData)
-		, szFolderPath(_szFolderPath)
-		, dataScope(_dataScope)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	char const* const     szFolderPath;
-	EAudioDataScope const dataScope;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_ParsePreloadsData> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(char const* const _szFolderPath, EAudioDataScope const _dataScope)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_ParsePreloadsData)
-		, szFolderPath(_szFolderPath)
-		, dataScope(_dataScope)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	char const* const     szFolderPath;
-	EAudioDataScope const dataScope;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_ClearControlsData> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(EAudioDataScope const _dataScope)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_ClearControlsData)
-		, dataScope(_dataScope)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	EAudioDataScope const dataScope;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_ClearPreloadsData> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(EAudioDataScope const _dataScope)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_ClearPreloadsData)
-		, dataScope(_dataScope)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	EAudioDataScope const dataScope;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_PreloadSingleRequest> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(AudioPreloadRequestId const _audioPreloadRequestId, bool const _bAutoLoadOnly)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_PreloadSingleRequest)
-		, audioPreloadRequestId(_audioPreloadRequestId)
-		, bAutoLoadOnly(_bAutoLoadOnly)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	AudioPreloadRequestId const audioPreloadRequestId;
-	bool const                  bAutoLoadOnly;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_UnloadSingleRequest> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(AudioPreloadRequestId const _audioPreloadRequestId)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_UnloadSingleRequest)
-		, audioPreloadRequestId(_audioPreloadRequestId)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	AudioPreloadRequestId const audioPreloadRequestId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_UnloadAFCMDataByScope> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(EAudioDataScope const _dataScope)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_UnloadAFCMDataByScope)
-		, dataScope(_dataScope)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	EAudioDataScope const dataScope;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_RefreshAudioSystem> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(char const* const _szLevelName)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_RefreshAudioSystem)
-		, szLevelName(_szLevelName)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	char const* const szLevelName;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioManagerRequestData<eAudioManagerRequestType_ReloadControlsData> : public SAudioManagerRequestDataBase
-{
-	explicit SAudioManagerRequestData(char const* const _szFolderPath, char const* const _szLevelName)
-		: SAudioManagerRequestDataBase(eAudioManagerRequestType_ReloadControlsData)
-		, szFolderPath(_szFolderPath)
-		, szLevelName(_szLevelName)
-	{}
-
-	virtual ~SAudioManagerRequestData() override = default;
-
-	char const* const szFolderPath;
-	char const* const szLevelName;
-};
-
-//////////////////////////////////////////////////////////////////////////
-struct SAudioCallbackManagerRequestDataBase : public SAudioRequestDataBase
-{
-	explicit SAudioCallbackManagerRequestDataBase(EAudioCallbackManagerRequestType const _type)
-		: SAudioRequestDataBase(eAudioRequestType_AudioCallbackManagerRequest)
-		, type(_type)
-	{}
-
-	virtual ~SAudioCallbackManagerRequestDataBase() override = default;
-
-	EAudioCallbackManagerRequestType const type;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<EAudioCallbackManagerRequestType T>
-struct SAudioCallbackManagerRequestData : public SAudioCallbackManagerRequestDataBase
-{
-	virtual ~SAudioCallbackManagerRequestData() override = default;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioCallbackManagerRequestData<eAudioCallbackManagerRequestType_ReportStartedEvent> : public SAudioCallbackManagerRequestDataBase
-{
-	explicit SAudioCallbackManagerRequestData(AudioEventId const _audioEventId)
-		: SAudioCallbackManagerRequestDataBase(eAudioCallbackManagerRequestType_ReportStartedEvent)
-		, audioEventId(_audioEventId)
-	{}
-
-	virtual ~SAudioCallbackManagerRequestData() override = default;
-
-	AudioEventId const audioEventId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioCallbackManagerRequestData<eAudioCallbackManagerRequestType_ReportFinishedEvent> : public SAudioCallbackManagerRequestDataBase
-{
-	explicit SAudioCallbackManagerRequestData(AudioEventId const _audioEventId, bool const _bSuccess)
-		: SAudioCallbackManagerRequestDataBase(eAudioCallbackManagerRequestType_ReportFinishedEvent)
-		, audioEventId(_audioEventId)
-		, bSuccess(_bSuccess)
-	{}
-
-	virtual ~SAudioCallbackManagerRequestData() override = default;
-
-	AudioEventId const audioEventId;
-	bool const         bSuccess;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioCallbackManagerRequestData<eAudioCallbackManagerRequestType_ReportVirtualizedEvent> : public SAudioCallbackManagerRequestDataBase
-{
-	explicit SAudioCallbackManagerRequestData(AudioEventId const _audioEventId)
-		: SAudioCallbackManagerRequestDataBase(eAudioCallbackManagerRequestType_ReportVirtualizedEvent)
-		, audioEventId(_audioEventId)
-	{}
-
-	virtual ~SAudioCallbackManagerRequestData() override = default;
-
-	AudioEventId const audioEventId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioCallbackManagerRequestData<eAudioCallbackManagerRequestType_ReportPhysicalizedEvent> : public SAudioCallbackManagerRequestDataBase
-{
-	explicit SAudioCallbackManagerRequestData(AudioEventId const _audioEventId)
-		: SAudioCallbackManagerRequestDataBase(eAudioCallbackManagerRequestType_ReportPhysicalizedEvent)
-		, audioEventId(_audioEventId)
-	{}
-
-	virtual ~SAudioCallbackManagerRequestData() override = default;
-
-	AudioEventId const audioEventId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioCallbackManagerRequestData<eAudioCallbackManagerRequestType_ReportFinishedTriggerInstance> : public SAudioCallbackManagerRequestDataBase
-{
-	explicit SAudioCallbackManagerRequestData(AudioControlId const _audioTriggerId)
-		: SAudioCallbackManagerRequestDataBase(eAudioCallbackManagerRequestType_ReportFinishedTriggerInstance)
-		, audioTriggerId(_audioTriggerId)
-	{}
-
-	virtual ~SAudioCallbackManagerRequestData() override = default;
-
-	AudioControlId const audioTriggerId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioCallbackManagerRequestData<eAudioCallbackManagerRequestType_ReportStartedFile> : public SAudioCallbackManagerRequestDataBase
-{
-	explicit SAudioCallbackManagerRequestData(
-	  AudioStandaloneFileId const _audioStandaloneFileInstanceId,
-	  char const* const _szFile, bool _bSuccess)
-		: SAudioCallbackManagerRequestDataBase(eAudioCallbackManagerRequestType_ReportStartedFile)
-		, audioStandaloneFileInstanceId(_audioStandaloneFileInstanceId)
-		, szFile(_szFile)
-		, bSuccess(_bSuccess)
-	{}
-
-	virtual ~SAudioCallbackManagerRequestData() override = default;
-
-	AudioStandaloneFileId const audioStandaloneFileInstanceId;
-	char const* const           szFile;
-	bool const                  bSuccess;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioCallbackManagerRequestData<eAudioCallbackManagerRequestType_ReportStoppedFile> : public SAudioCallbackManagerRequestDataBase
-{
-	explicit SAudioCallbackManagerRequestData(
-	  AudioStandaloneFileId const _audioStandaloneFileInstanceId,
-	  char const* const _szFile)
-		: SAudioCallbackManagerRequestDataBase(eAudioCallbackManagerRequestType_ReportStoppedFile)
-		, audioStandaloneFileInstanceId(_audioStandaloneFileInstanceId)
-		, szFile(_szFile)
-	{}
-
-	virtual ~SAudioCallbackManagerRequestData() override = default;
-
-	AudioStandaloneFileId const audioStandaloneFileInstanceId;
-	char const* const           szFile;
-};
-
-//////////////////////////////////////////////////////////////////////////
-struct SAudioObjectRequestDataBase : public SAudioRequestDataBase
-{
-	explicit SAudioObjectRequestDataBase(EAudioObjectRequestType const _type)
-		: SAudioRequestDataBase(eAudioRequestType_AudioObjectRequest)
-		, type(_type)
-	{}
-
-	virtual ~SAudioObjectRequestDataBase() override = default;
-
-	EAudioObjectRequestType const type;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<EAudioObjectRequestType T>
-struct SAudioObjectRequestData : public SAudioObjectRequestDataBase
-{
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(T)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_PrepareTrigger> : public SAudioObjectRequestDataBase
-{
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_PrepareTrigger)
-		, audioTriggerId(INVALID_AUDIO_CONTROL_ID)
-	{}
-
-	explicit SAudioObjectRequestData(AudioControlId const _audioTriggerId)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_PrepareTrigger)
-		, audioTriggerId(_audioTriggerId)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	AudioControlId audioTriggerId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_UnprepareTrigger> : public SAudioObjectRequestDataBase
-{
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_UnprepareTrigger)
-		, audioTriggerId(INVALID_AUDIO_CONTROL_ID)
-	{}
-
-	explicit SAudioObjectRequestData(AudioControlId const _audioTriggerId)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_UnprepareTrigger)
-		, audioTriggerId(_audioTriggerId)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	AudioControlId audioTriggerId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_PlayFile> : public SAudioObjectRequestDataBase
-{
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_PlayFile)
-		, szFile(nullptr)
-		, bLocalized(true)
-		, usedAudioTriggerId(INVALID_AUDIO_CONTROL_ID)
-	{}
-
-	explicit SAudioObjectRequestData(char const* const _szFile, bool _bLocalized, AudioControlId _usedAudioTriggerId)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_PlayFile)
-		, szFile(_szFile)
-		, bLocalized(_bLocalized)
-		, usedAudioTriggerId(_usedAudioTriggerId)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	char const*    szFile;
-	bool           bLocalized;
-	AudioControlId usedAudioTriggerId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_StopFile> : public SAudioObjectRequestDataBase
-{
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_StopFile)
-		, szFile(nullptr)
-	{}
-
-	explicit SAudioObjectRequestData(char const* const _szFile)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_StopFile)
-		, szFile(_szFile)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	char const* szFile;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_ExecuteTrigger> : public SAudioObjectRequestDataBase
-{
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_ExecuteTrigger)
-		, audioTriggerId(INVALID_AUDIO_CONTROL_ID)
-		, timeUntilRemovalInMS(0.0f)
-	{}
-
-	explicit SAudioObjectRequestData(AudioControlId const _audioTriggerId, float const fPassedTimeUntilRemovalInMS)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_ExecuteTrigger)
-		, audioTriggerId(_audioTriggerId)
-		, timeUntilRemovalInMS(fPassedTimeUntilRemovalInMS)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	AudioControlId audioTriggerId;
-	float          timeUntilRemovalInMS;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_StopTrigger> : public SAudioObjectRequestDataBase
-{
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_StopTrigger)
-		, audioTriggerId(INVALID_AUDIO_CONTROL_ID)
-	{}
-
-	explicit SAudioObjectRequestData(AudioControlId const _audioTriggerId)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_StopTrigger)
-		, audioTriggerId(_audioTriggerId)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	AudioControlId audioTriggerId;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_SetTransformation> : public SAudioObjectRequestDataBase
-{
-	explicit SAudioObjectRequestData(CAudioObjectTransformation const& _transformation)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetTransformation)
-		, transformation(_transformation)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
+	char const* const               szName;
+	EOcclusionType const            occlusionType;
 
 	// We opt for copying the transformation instead of storing a reference in order to prevent a potential dangling-reference bug.
 	// Callers might pass a vector or matrix to the constructor, which implicitly convert to CAudioObjectTransformation.
-	// Implicit conversion introduces a temporary object, and a reference could potentially dangle, as the temporary gets destroyed before this request gets passed to CAudioSystem::PushRequest,
-	// where it gets ultimately copied for internal processing.
-	CAudioObjectTransformation const transformation;
+	// Implicit conversion introduces a temporary object, and a reference could potentially dangle,
+	// as the temporary gets destroyed before this request gets passed to the AudioSystem where it gets ultimately copied for internal processing.
+	CTransformation const transformation;
+
+	bool const            setCurrentEnvironments;
+	ListenerIds const     listenerIds;
 };
 
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_SetRtpcValue> : public SAudioObjectRequestDataBase
+struct SExecuteTriggerData : public SCreateObjectData
 {
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetRtpcValue)
-		, audioRtpcId(INVALID_AUDIO_CONTROL_ID)
-		, value(0.0f)
+	explicit SExecuteTriggerData(
+		ControlId const triggerId_,
+		char const* const szName_ = nullptr,
+		EOcclusionType const occlusionType_ = EOcclusionType::Ignore,
+		CTransformation const& transformation_ = CTransformation::GetEmptyObject(),
+		EntityId const entityId_ = INVALID_ENTITYID,
+		bool const setCurrentEnvironments_ = false)
+		: SCreateObjectData(szName_, occlusionType_, transformation_, setCurrentEnvironments_)
+		, triggerId(triggerId_)
+		, entityId(entityId_)
 	{}
 
-	explicit SAudioObjectRequestData(AudioControlId const _audioRtpcId, float const fPassedValue)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetRtpcValue)
-		, audioRtpcId(_audioRtpcId)
-		, value(fPassedValue)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	AudioControlId audioRtpcId;
-	float          value;
+	ControlId const triggerId;
+	EntityId const  entityId;
 };
 
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_SetSwitchState> : public SAudioObjectRequestDataBase
+struct STriggerCallbackData
 {
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetSwitchState)
-		, audioSwitchId(INVALID_AUDIO_CONTROL_ID)
-		, audioSwitchStateId(INVALID_AUDIO_SWITCH_STATE_ID)
+	explicit STriggerCallbackData(
+		ControlId const controlId_,
+		ESystemEvents const events_,
+		void (*func_)(SRequestInfo const* const))
+		: triggerId(controlId_)
+		, events(events_)
+		, func(func_)
 	{}
 
-	explicit SAudioObjectRequestData(AudioControlId const _audioSwitchId, AudioSwitchStateId const _audioSwitchStateId)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetSwitchState)
-		, audioSwitchId(_audioSwitchId)
-		, audioSwitchStateId(_audioSwitchStateId)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	AudioControlId     audioSwitchId;
-	AudioSwitchStateId audioSwitchStateId;
+	ControlId const     triggerId;
+	ESystemEvents const events;
+	void                (* func)(SRequestInfo const* const);
 };
 
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_SetVolume> : public SAudioObjectRequestDataBase
+struct ISystemModule : public Cry::IDefaultModule
 {
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetVolume)
-		, volume(1.0f)
-	{}
-
-	explicit SAudioObjectRequestData(float const _volume)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetVolume)
-		, volume(_volume)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	float const volume;
+	CRYINTERFACE_DECLARE_GUID(ISystemModule, "6c7ba422-375b-4325-ae00-918679610d2e"_cry_guid);
 };
 
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_SetEnvironmentAmount> : public SAudioObjectRequestDataBase
+struct IImplModule : public Cry::IDefaultModule
 {
-	SAudioObjectRequestData()
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetEnvironmentAmount)
-		, audioEnvironmentId(INVALID_AUDIO_ENVIRONMENT_ID)
-		, amount(1.0f)
-	{}
-
-	explicit SAudioObjectRequestData(AudioEnvironmentId const _audioEnvironmentId, float const _amount)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_SetEnvironmentAmount)
-		, audioEnvironmentId(_audioEnvironmentId)
-		, amount(_amount)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	AudioEnvironmentId audioEnvironmentId;
-	float              amount;
+	CRYINTERFACE_DECLARE_GUID(IImplModule, "5c4adbec-a343-49ce-b799-2a856cdd553b"_cry_guid);
 };
 
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioObjectRequestData<eAudioObjectRequestType_ProcessPhysicsRay> : public SAudioObjectRequestDataBase
-{
-	explicit SAudioObjectRequestData(CAudioRayInfo* const _pAudioRayInfo)
-		: SAudioObjectRequestDataBase(eAudioObjectRequestType_ProcessPhysicsRay)
-		, pAudioRayInfo(_pAudioRayInfo)
-	{}
-
-	virtual ~SAudioObjectRequestData() override = default;
-
-	CAudioRayInfo* const pAudioRayInfo;
-};
-
-//////////////////////////////////////////////////////////////////////////
-struct SAudioListenerRequestDataBase : public SAudioRequestDataBase
-{
-	explicit SAudioListenerRequestDataBase(EAudioListenerRequestType const _type)
-		: SAudioRequestDataBase(eAudioRequestType_AudioListenerRequest)
-		, type(_type)
-	{}
-
-	virtual ~SAudioListenerRequestDataBase() override = default;
-
-	EAudioListenerRequestType const type;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<EAudioListenerRequestType T>
-struct SAudioListenerRequestData : public SAudioListenerRequestDataBase
-{
-	virtual ~SAudioListenerRequestData() override = default;
-};
-
-//////////////////////////////////////////////////////////////////////////
-template<>
-struct SAudioListenerRequestData<eAudioListenerRequestType_SetTransformation> : public SAudioListenerRequestDataBase
-{
-	explicit SAudioListenerRequestData(CAudioObjectTransformation const& _transformation, CATLListener* const _pListener = nullptr)
-		: SAudioListenerRequestDataBase(eAudioListenerRequestType_SetTransformation)
-		, transformation(_transformation)
-		, pListener(_pListener)
-	{}
-
-	virtual ~SAudioListenerRequestData() override = default;
-
-	// We opt for copying the transformation instead of storing a reference in order to prevent a potential dangling-reference bug.
-	// Callers might pass a vector or matrix to the constructor, which implicitly convert to CAudioObjectTransformation.
-	// Implicit conversion introduces a temporary object, and a reference could potentially dangle, as the temporary gets destroyed before this request gets passed to CAudioSystem::PushRequest,
-	// where it gets ultimately copied for internal processing.
-	CAudioObjectTransformation const transformation;
-	CATLListener* const              pListener;
-};
-
-//////////////////////////////////////////////////////////////////////////
-struct IAudioProxy
-{
-	// <interfuscator:shuffle>
-	virtual ~IAudioProxy() = default;
-
-	virtual void             Initialize(char const* const szAudioObjectName, bool const bInitAsync = true) = 0;
-	virtual void             Release() = 0;
-	virtual void             Reset() = 0;
-	virtual void             PlayFile(SAudioPlayFileInfo const& _playbackInfo, SAudioCallBackInfo const& _callBackInfo = SAudioCallBackInfo::GetEmptyObject()) = 0;
-	virtual void             StopFile(char const* const szFile) = 0;
-	virtual void             ExecuteTrigger(AudioControlId const audioTriggerId, SAudioCallBackInfo const& callBackInfo = SAudioCallBackInfo::GetEmptyObject()) = 0;
-	virtual void             StopTrigger(AudioControlId const audioTriggerId) = 0;
-	virtual void             SetSwitchState(AudioControlId const audioSwitchId, AudioSwitchStateId const audioSwitchStateId) = 0;
-	virtual void             SetRtpcValue(AudioControlId const audioRtpcId, float const value) = 0;
-	virtual void             SetOcclusionType(EAudioOcclusionType const occlusionType) = 0;
-	virtual void             SetTransformation(Matrix34 const& transformation) = 0;
-	virtual void             SetPosition(Vec3 const& position) = 0;
-	virtual void             SetEnvironmentAmount(AudioEnvironmentId const audioEnvironmentId, float const amount) = 0;
-	virtual void             SetCurrentEnvironments(EntityId const entityToIgnore = 0) = 0;
-	virtual CATLAudioObject* GetAudioObject() const = 0;
-	// </interfuscator:shuffle>
-};
-
-//////////////////////////////////////////////////////////////////////////
+//! Main interface to the audio system, allowing access to audio playback via implementation plug-ins.
 struct IAudioSystem
 {
 	// <interfuscator:shuffle>
+	/** @cond */
 	virtual ~IAudioSystem() = default;
+	/** @endcond */
 
-	virtual bool          Initialize() = 0;
-	virtual void          Release() = 0;
-	virtual void          PushRequest(SAudioRequest const& audioRequest) = 0;
-	virtual void          AddRequestListener(void (* func)(SAudioRequestInfo const* const), void* const pObjectToListenTo, EAudioRequestType const requestType = eAudioRequestType_AudioAllRequests, AudioEnumFlagsType const specificRequestMask = ALL_AUDIO_REQUEST_SPECIFIC_TYPE_FLAGS) = 0;
-	virtual void          RemoveRequestListener(void (* func)(SAudioRequestInfo const* const), void* const pObjectToListenTo) = 0;
-	virtual void          ExternalUpdate() = 0;
-	virtual bool          GetAudioTriggerId(char const* const szAudioTriggerName, AudioControlId& audioTriggerId) const = 0;
-	virtual bool          GetAudioRtpcId(char const* const szAudioRtpcName, AudioControlId& audioRtpcId) const = 0;
-	virtual bool          GetAudioSwitchId(char const* const szAudioSwitchName, AudioControlId& audioSwitchId) const = 0;
-	virtual bool          GetAudioSwitchStateId(AudioControlId const audioSwitchId, char const* const szSwitchStateName, AudioSwitchStateId& audioSwitchStateId) const = 0;
-	virtual bool          GetAudioPreloadRequestId(char const* const szAudioPreloadRequestName, AudioPreloadRequestId& audioPreloadRequestId) const = 0;
-	virtual bool          GetAudioEnvironmentId(char const* const szAudioEnvironmentName, AudioEnvironmentId& audioEnvironmentId) const = 0;
-	virtual CATLListener* CreateAudioListener() = 0;
-	virtual void          ReleaseAudioListener(CATLListener* pListener) = 0;
-	virtual void          OnCVarChanged(ICVar* const pCvar) = 0;
-	virtual char const*   GetConfigPath() const = 0;
-	virtual IAudioProxy*  GetFreeAudioProxy() = 0;
-	virtual void          GetAudioFileData(char const* const szFilename, SAudioFileData& audioFileData) = 0;
-	virtual void          GetAudioTriggerData(AudioControlId const audioTriggerId, SAudioTriggerData& audioFileData) = 0;
-	virtual void          SetAllowedThreadId(threadID id) = 0;
+	/**
+	 * This is called during shutdown of the engine which releases AudioSystem resources.
+	 * @return void
+	 */
+	virtual void Release() = 0;
+
+	/**
+	 * Used by audio middleware implementations to register themselves with the AudioSystem.
+	 * @param pIImpl - pointer to the audio middleware implementation to register.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void SetImpl(Impl::IImpl* const pIImpl, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Performs the actions passed in the "triggerData" parameter. This is used for 3D type events exclusively. For 2D type events refer to ExecuteTrigger.
+	 * For convenience and efficiency this is used as a "fire and forget" type action where the user does not need to explicitly handle an audio object.
+	 * Make sure to only start non-looped type events this way otherwise they will turn into runaway loops.
+	 * @param triggerData - reference to an object that holds all of the data necessary for the trigger execution.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void ExecuteTriggerEx(SExecuteTriggerData const& triggerData, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Executes the passed trigger ID. This is used for 2D type events exclusively. For 3D type events refer to ExecuteTriggerEx.
+	 * @param triggerId - ID of the trigger to execute.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 * @see StopTrigger
+	 */
+	virtual void ExecuteTrigger(ControlId const triggerId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Executes the passed trigger ID and registers the trigger for callbacks to get received. Also registers an event listener.
+	 * @param callbackData - struct to pass data for callbacks to the request.
+	 * @param userData - optional struct used to pass additional data to the internal request. Registers pOwner as event listener.
+	 * @return void
+	 * @see StopTrigger
+	 */
+	virtual void ExecuteTriggerWithCallbacks(STriggerCallbackData const& callbackData, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Stops all instances of the passed trigger ID or all instances of all active triggers if CryAudio::InvalidControlId (default) is passed.
+	 * @param triggerId - ID of the trigger to stop.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 * @see ExecuteTrigger
+	 */
+	virtual void StopTrigger(ControlId const triggerId = InvalidControlId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Set a parameter to a given value on the global object.
+	 * @param parameterId - ID of the parameter in question.
+	 * @param value - floating point value to which the parameter should be set.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void SetParameter(ControlId const parameterId, float const value, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Set a parameter to a given value on all objects.
+	 * @param parameterId - ID of the parameter in question.
+	 * @param value - floating point value to which the parameter should be set.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void SetParameterGlobally(ControlId const parameterId, float const value, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Set a switch to a given state on the global object.
+	 * @param switchId - ID of the switch in question.
+	 * @param switchStateId - ID of the switch's state in question.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void SetSwitchState(ControlId const switchId, SwitchStateId const switchStateId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Set a switch to a given state on all objects.
+	 * @param switchId - ID of the switch in question.
+	 * @param switchStateId - ID of the switch's state in question.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void SetSwitchStateGlobally(ControlId const switchId, SwitchStateId const switchStateId, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Used by audio middleware implementations to inform the AudioSystem that an instance of a trigger connection has started.
+	 * @param triggerInstanceId - id of the the instance of the trigger connection that started.
+	 * @param result - trigger result of the trigger connection instance when is started.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void ReportStartedTriggerConnectionInstance(TriggerInstanceId const triggerInstanceId, ETriggerResult const result, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Used by audio middleware implementations to inform the AudioSystem that an instance of a trigger connection finished producing sound.
+	 * @param triggerInstanceId - id of the the instance of the trigger connection that finished producing sound.
+	 * @param result - trigger result of the trigger connection instance that finished producing sound.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void ReportFinishedTriggerConnectionInstance(TriggerInstanceId const triggerInstanceId, ETriggerResult const result, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Used by audio middleware implementations to inform the AudioSystem that an instance of a trigger connection finished producing sound.
+	 * @param triggerInstanceId - id of the the instance of the trigger connection that fired the callback.
+	 * @param systemEvent - system event that was listened to.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void ReportTriggerConnectionInstanceCallback(TriggerInstanceId const triggerInstanceId, ESystemEvents const systemEvent, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Used by audio middleware implementations to inform the AudioSystem that an object got physical.
+	 * @param pIObject - middleware implementation specific object that got physicalized.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void ReportPhysicalizedObject(Impl::IObject* const pIObject, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Used by audio middleware implementations to inform the AudioSystem that an object got virtual.
+	 * @param pIObject - middleware implementation specific object that got virtual.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void ReportVirtualizedObject(Impl::IObject* const pIObject, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Used to instruct the AudioSystem that it should stop all playing sounds.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 */
+	virtual void StopAllSounds(SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Loads all of the data referenced by the given preload request.
+	 * @param id - ID of the preload request in question.
+	 * @param bAutoLoadOnly - boolean indicating whether to load the given preload request only if it's been set to AutoLoad.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 * @see UnloadSingleRequest
+	 */
+	virtual void PreloadSingleRequest(PreloadRequestId const id, bool const bAutoLoadOnly, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Unloads all of the data referenced by the given preload request.
+	 * @param id - ID of the preload request in question.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 * @see PreloadSingleRequest
+	 */
+	virtual void UnloadSingleRequest(PreloadRequestId const id, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Activates the given context. Loads all meta data and auto-loaded preload requests that belong to that context.
+	 * This should only get called during loading the game or a level!
+	 * @param contextId - id of the context to activate.
+	 * @return void
+	 * @see DeactivateContext
+	 */
+	virtual void ActivateContext(ContextId const contextId) = 0;
+
+	/**
+	 * Deactivates the given context. unloads all meta data and preload requests that belong to that context.
+	 * This should only get called during loading the game or a level!
+	 * @param contextId - id of the context to deactivate.
+	 * @return void
+	 * @see ActivateContext
+	 */
+	virtual void DeactivateContext(ContextId const contextId) = 0;
+
+	/**
+	 * Loads a setting.
+	 * @param id - ID of the setting in question.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 * @see UnloadSetting
+	 */
+	virtual void LoadSetting(ControlId const id, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Unloads a setting.
+	 * @param id - ID of thes etting in question.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return void
+	 * @see LoadSetting
+	 */
+	virtual void UnloadSetting(ControlId const id, SRequestUserData const& userData = SRequestUserData::GetEmptyObject()) = 0;
+
+	/**
+	 * Used to register a callback function that is called whenever a given event occurred.
+	 * @param func - address of the function to be called.
+	 * @param pObjectToListenTo - address of the object in which events one is interested. If set to nullptr events of the given type produced by any object will be listened to.
+	 * @param eventMask - a combination of CryAudio::ESystemEvents one is interested in. If set to ESystemEvents::All, all events generated by the given object will be received.
+	 * @return void
+	 * @see RemoveRequestListener
+	 */
+	virtual void AddRequestListener(void (*func)(SRequestInfo const* const), void* const pObjectToListenTo, ESystemEvents const eventMask) = 0;
+
+	/**
+	 * Used to unregister a callback function.
+	 * @param func - address of the function to be called.
+	 * @param pObjectToListenTo - address of the object in which events one is interested. If set to nullptr events of the given type produced by any object will be listened to.
+	 * @return void
+	 * @see AddRequestListener
+	 */
+	virtual void RemoveRequestListener(void (*func)(SRequestInfo const* const), void* const pObjectToListenTo) = 0;
+
+	/**
+	 * Ideally called by the application's main thread.
+	 * Note: If requests are set to call back from an external thread then this will be the thread that calls back.
+	 * @return void
+	 */
+	virtual void ExternalUpdate() = 0;
+
+	/**
+	 * Returns the path in which audio data is stored.
+	 * @return char const pointer to the string holding the location.
+	 */
+	virtual char const* GetConfigPath() const = 0;
+
+	/**
+	 * Constructs an instance of an audio listener.
+	 * Note: Retrieving a listener this way requires the instance to be freed via ReleaseListener once not needed anymore!
+	 * @param transformation - transformation of the listener to be created.
+	 * @param szName - name of the listener to be created.
+	 * @return Pointer to a freshly constructed CryAudio::IListener instance.
+	 * @see ReleaseListener
+	 */
+	virtual IListener* CreateListener(CTransformation const& transformation, char const* const szName) = 0;
+
+	/**
+	 * Destructs the passed audio listener instance.
+	 * @param pIListener - Pointer to the audio listener that needs destruction.
+	 * @return void
+	 * @see CreateListener
+	 */
+	virtual void ReleaseListener(IListener* const pIListener) = 0;
+
+	/**
+	 * Returns a pointer to the requested listener.
+	 * @param id - id of the requested listener. If none is provided, a pointer to the default listener is returned.
+	 * @return Pointer to the requested listener.
+	 */
+	virtual IListener* GetListener(ListenerId const id = DefaultListenerId) = 0;
+
+	/**
+	 * Constructs an instance of an audio object.
+	 * Note: Retrieving an object this way requires the object to be freed via ReleaseObject once not needed anymore!
+	 * @param objectData - optional data used during audio object construction.
+	 * @param userData - optional struct used to pass additional data to the internal request.
+	 * @return Pointer to a freshly constructed CryAudio::IObject instance.
+	 * @see ReleaseObject
+	 */
+	virtual IObject* CreateObject(SCreateObjectData const& objectData = SCreateObjectData::GetEmptyObject()) = 0;
+
+	/**
+	 * Destructs the passed audio object instance.
+	 * @param pIObject - Pointer to the audio object that needs destruction.
+	 * @return void
+	 * @see CreateObject
+	 */
+	virtual void ReleaseObject(IObject* const pIObject) = 0;
+
+	/**
+	 * Retrieve an audio trigger's attributes.
+	 * @param triggerId - id of the trigger in question.
+	 * @param triggerData - out parameter which receives the trigger's data.
+	 * @return void
+	 */
+	virtual void GetTriggerData(ControlId const triggerId, STriggerData& triggerData) = 0;
+
+	/**
+	 * Retrieve information about the current middleware implementation.
+	 * @param[out] implInfo - a reference to an instance of SImplInfo
+	 * @return void
+	 */
+	virtual void GetImplInfo(SImplInfo& implInfo) = 0;
+
+	/**
+	 * Logs an audio specific message and adds an audio tag plus time stamp to the string.
+	 * Note: Don't use this method directly, instead use Cry::Audio::Log()!
+	 * @param type - log message type (ELogType)
+	 * @param szFormat, ... - printf-style format string and its argument
+	 * @return void
+	 */
+	virtual void Log(ELogType const type, char const* const szFormat, ...) = 0;
+
+	//////////////////////////////////////////////////////////////////////////
+	// NOTE: The methods below are ONLY USED when INCLUDE_AUDIO_PRODUCTION_CODE is defined!
+	//////////////////////////////////////////////////////////////////////////
+
+	/**
+	 * Executes a trigger from the given id on the preview object.
+	 * @param triggerId - id of the trigger.
+	 * @return void
+	 * @see StopPreviewTrigger
+	 */
+	virtual void ExecutePreviewTrigger(ControlId const triggerId) = 0;
+
+	/**
+	 * Constructs a trigger from the given info struct and executes it on the preview object.
+	 * @param triggerInfo - info struct to construct a trigger.
+	 * @return void
+	 * @see StopPreviewTrigger
+	 */
+	virtual void ExecutePreviewTriggerEx(Impl::ITriggerInfo const& triggerInfo) = 0;
+
+	/**
+	 * Constructs a trigger from the given XML node and executes it on the preview object.
+	 * @param node - XML node to construct a trigger.
+	 * @return void
+	 * @see StopPreviewTrigger
+	 */
+	virtual void ExecutePreviewTriggerEx(XmlNodeRef const& node) = 0;
+
+	/**
+	 * Stops the active trigger on the preview object.
+	 * @return void
+	 * @see ExecutePreviewTrigger
+	 */
+	virtual void StopPreviewTrigger() = 0;
+
+	/**
+	 * Used to refresh an object. This is only needed when renaming a Wwise game object.
+	 * @param pIObject - middleware implementation specific object that should be refreshed.
+	 * @return void
+	 */
+	virtual void RefreshObject(Impl::IObject* const pIObject) = 0;
 	// </interfuscator:shuffle>
 };
+} // namespace CryAudio
+
+AUTO_TYPE_INFO(CryAudio::EOcclusionType);

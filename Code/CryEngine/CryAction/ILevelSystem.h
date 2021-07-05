@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 /*************************************************************************
    -------------------------------------------------------------------------
@@ -88,9 +88,8 @@ struct ILevelRotation
 struct ILevelInfo
 {
 	virtual ~ILevelInfo(){}
-	typedef std::vector<string> TStringVec;
 
-	typedef struct
+	struct SGameTypeInfo
 	{
 		string name;
 		string xmlFile;
@@ -100,21 +99,19 @@ struct ILevelInfo
 			pSizer->AddObject(name);
 			pSizer->AddObject(xmlFile);
 		}
-	} TGameTypeInfo;
+	};
 
 	struct SMinimapInfo
 	{
-		SMinimapInfo() : fStartX(0), fStartY(0), fEndX(1), fEndY(1), fDimX(1), fDimY(1), iWidth(1024), iHeight(1024) {}
-
 		string sMinimapName;
-		int    iWidth;
-		int    iHeight;
-		float  fStartX;
-		float  fStartY;
-		float  fEndX;
-		float  fEndY;
-		float  fDimX;
-		float  fDimY;
+		int    iWidth  = 1024;
+		int    iHeight = 1024;
+		float  fStartX = 0.f;
+		float  fStartY = 0.f;
+		float  fEndX   = 1.f;
+		float  fEndY   = 1.f;
+		float  fDimX   = 1.f;
+		float  fDimY   = 1.f;
 	};
 
 	virtual const char*                      GetName() const = 0;
@@ -132,10 +129,11 @@ struct ILevelInfo
 	virtual const uint32                     GetLevelTag() const = 0;
 
 	virtual int                              GetGameTypeCount() const = 0;
-	virtual const ILevelInfo::TGameTypeInfo* GetGameType(int gameType) const = 0;
+	virtual const ILevelInfo::SGameTypeInfo* GetGameType(int gameType) const = 0;
 	virtual bool                             SupportsGameType(const char* gameTypeName) const = 0;
-	virtual const ILevelInfo::TGameTypeInfo* GetDefaultGameType() const = 0;
-	virtual ILevelInfo::TStringVec           GetGameRules() const = 0;
+	virtual const ILevelInfo::SGameTypeInfo* GetDefaultGameType() const = 0;
+	virtual size_t                           GetGameRulesCount() const = 0;
+	virtual size_t                           GetGameRules(const char** pszGameRules, size_t numGameRules) const = 0;
 	virtual bool                             HasGameRules() const = 0;
 
 	virtual const ILevelInfo::SMinimapInfo&  GetMinimapInfo() const = 0;
@@ -155,14 +153,14 @@ struct ILevelInfo
 
 struct ILevelSystemListener
 {
-	virtual ~ILevelSystemListener(){}
-	virtual void OnLevelNotFound(const char* levelName) = 0;
-	virtual void OnLoadingStart(ILevelInfo* pLevel) = 0;
-	virtual void OnLoadingLevelEntitiesStart(ILevelInfo* pLevel) = 0;
-	virtual void OnLoadingComplete(ILevelInfo* pLevel) = 0;
-	virtual void OnLoadingError(ILevelInfo* pLevel, const char* error) = 0;
-	virtual void OnLoadingProgress(ILevelInfo* pLevel, int progressAmount) = 0;
-	virtual void OnUnloadComplete(ILevelInfo* pLevel) = 0;
+	virtual ~ILevelSystemListener()                                        {}
+	virtual void OnLevelNotFound(const char* levelName)                    {}
+	virtual bool OnLoadingStart(ILevelInfo* pLevel)                        { return true; }
+	virtual void OnLoadingLevelEntitiesStart(ILevelInfo* pLevel)           {}
+	virtual void OnLoadingComplete(ILevelInfo* pLevel)                     {}
+	virtual void OnLoadingError(ILevelInfo* pLevel, const char* error)     {}
+	virtual void OnLoadingProgress(ILevelInfo* pLevel, int progressAmount) {}
+	virtual void OnUnloadComplete(ILevelInfo* pLevel)                      {}
 
 	void         GetMemoryUsage(ICrySizer* pSizer) const { /*nothing*/ }
 };
@@ -174,6 +172,14 @@ struct ILevelSystem :
 	{
 		TAG_MAIN    = 'MAIN',
 		TAG_UNKNOWN = 'ZZZZ'
+	};
+
+	//! Result of time-sliced level loading
+	enum class ELevelLoadStatus
+	{
+		InProgress,  //!< Loading in progress
+		Done,        //!< Loading done
+		Failed       //!< Loading failed 
 	};
 
 	virtual void              Rescan(const char* levelsFolder, const uint32 tag) = 0;
@@ -188,6 +194,8 @@ struct ILevelSystem :
 
 	virtual ILevelInfo*       GetCurrentLevel() const = 0;
 	virtual ILevelInfo*       LoadLevel(const char* levelName) = 0;
+	virtual bool              StartLoadLevel(const char* szLevelName) = 0;
+	virtual ELevelLoadStatus  UpdateLoadLevelStatus() = 0;
 	virtual void              UnLoadLevel() = 0;
 	virtual ILevelInfo*       SetEditorLoadedLevel(const char* levelName, bool bReadLevelInfoMetaData = false) = 0;
 	virtual bool              IsLevelLoaded() = 0;

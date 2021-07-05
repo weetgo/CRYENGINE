@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #ifndef _TINYSPLITTER_H_
 #define _TINYSPLITTER_H_
@@ -13,6 +13,9 @@
 class _TinySplitter : public _TinyWindow
 {
 public:
+
+	using _TinyWindow::Create;
+
 	virtual BOOL Create(_TinyWindow* pParentWnd = NULL, _TinyWindow* pPan0 = NULL, _TinyWindow* pPan1 = NULL, bool bVertical = false, const RECT* pRect = NULL)
 	{
 		BOOL bRes = _TinyWindow::Create(_T("_default_TinyWindowClass"), _T(""), WS_VISIBLE | WS_CHILD | WS_CLIPCHILDREN, NULL, pRect, pParentWnd);

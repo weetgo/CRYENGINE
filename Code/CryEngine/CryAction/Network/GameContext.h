@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 /*************************************************************************
    -------------------------------------------------------------------------
@@ -21,9 +21,9 @@
 #include <CryGame/IGameFramework.h>
 #include <CryEntitySystem/IEntitySystem.h>
 #include <CryScriptSystem/IScriptSystem.h>
-#include "SensedInclusionSet.h"
 #include "ClassRegistryReplicator.h"
 #include <CryNetwork/INetworkService.h>
+#include <CryPhysics/IPhysics.h>
 
 // FIXME: Cell SDK GCC bug workaround.
 #ifndef __GAMEOBJECT_H__
@@ -113,9 +113,6 @@ public:
 	virtual INetSendableHookPtr CreateObjectSpawner(EntityId id, INetChannel* pChannel);
 	virtual void                ObjectInitClient(EntityId id, INetChannel* pChannel);
 	virtual bool                SendPostSpawnObject(EntityId id, INetChannel* pChannel);
-	virtual uint8               GetDefaultProfileForAspect(EntityId id, NetworkAspectType aspectID);
-	virtual bool                SetAspectProfile(EntityId id, NetworkAspectType nAspect, uint8 profile);
-	virtual void                BoundObject(EntityId id, NetworkAspectType nAspects);
 	virtual void                UnboundObject(EntityId id);
 	virtual INetAtSyncItem*     HandleRMI(bool bClient, EntityId objID, uint8 funcID, TSerialize ser, INetChannel* pChannel);
 	virtual void                ControlObject(EntityId id, bool bHaveControl);
@@ -123,7 +120,6 @@ public:
 	virtual void                OnStartNetworkFrame();
 	virtual void                OnEndNetworkFrame();
 	virtual void                ReconfigureGame(INetChannel* pNetChannel);
-	virtual uint32              HashAspect(EntityId id, NetworkAspectType nAspect);
 	virtual CTimeValue          GetPhysicsTime();
 	virtual void                BeginUpdateObjects(CTimeValue physTime, INetChannel* pChannel);
 	virtual void                EndUpdateObjects();
@@ -142,12 +138,12 @@ public:
 	virtual void OnSpawn(IEntity* pEntity, SEntitySpawnParams& params);
 	virtual bool OnRemove(IEntity* pEntity);
 	virtual void OnReused(IEntity* pEntity, SEntitySpawnParams& params);
-	virtual void OnEvent(IEntity* pEntity, SEntityEvent& event);
 	// ~IEntitySystemSink
 
 	// IConsoleVarSink
 	virtual bool OnBeforeVarChange(ICVar* pVar, const char* sNewValue);
 	virtual void OnAfterVarChange(ICVar* pVar);
+	virtual void OnVarUnregister(ICVar* pVar) {}
 	// ~IConsoleVarSink
 
 	// IHostMigrationEventListener
@@ -201,23 +197,18 @@ public:
 	{
 		m_pNetContext->ChangedAspects(id, eEA_Script);
 	}
-	void   EnablePhysics(EntityId id, bool enable);
 
 	bool   ChangeContext(bool isServer, const SGameContextParams* pParams);
 
 	void   SetContextInfo(unsigned flags, uint16 port, const char* connectionString);
+	void   SetContextFlag(EGameStartFlags flag) { m_flags |= flag; }
+	void   ClearContextFlag(EGameStartFlags flag) { m_flags &= ~flag; }
 	bool   HasContextFlag(EGameStartFlags flag) const { return (m_flags & flag) != 0; }
 	uint16 GetServerPort() const                      { return m_port; }
 	string GetConnectionString(CryFixedStringT<HOST_MIGRATION_MAX_PLAYER_NAME_SIZE>* pNameOverride, bool fake) const;
 
 	void   DefineContextProtocols(IProtocolBuilder* pBuilder, bool server);
 
-	bool   ControlsEntity(EntityId id) const
-	{
-		return m_controlledObjects.Get(id);
-	}
-
-	void        EnableAspects(EntityId id, NetworkAspectType aspects, bool bEnable);
 	void        AddControlObjectCallback(EntityId id, bool willHaveControl, HSCRIPTFUNCTION func);
 
 	static void RegisterExtensions(IGameFramework* pFW);
@@ -226,8 +217,6 @@ public:
 
 	void        GetMemoryUsage(ICrySizer* pSizer) const;
 	void        GetMemoryStatistics(ICrySizer* pSizer) { GetMemoryUsage(pSizer); /*dummy till network module is updated*/ }
-	void        LockResources();
-	void        UnlockResources();
 
 #if ENABLE_NETDEBUG
 	CNetDebug* GetNetDebug() { return m_pNetDebug; }
@@ -286,8 +275,6 @@ private:
 #endif
 
 	CClassRegistryReplicator     m_classRegistry;
-
-	SensedInclusionSet<EntityId> m_controlledObjects;
 
 	// context parameters
 	string   m_levelName;

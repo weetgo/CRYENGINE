@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #ifndef _TINY_CAPTION_WINDOW_H_
 #define _TINY_CAPTION_WINDOW_H_
@@ -10,6 +10,9 @@
 class _TinyCaptionWindow : public _TinyWindow
 {
 public:
+
+	using _TinyWindow::Create;
+
 	_TinyCaptionWindow() { m_pContent = NULL; };
 	~_TinyCaptionWindow() {};
 

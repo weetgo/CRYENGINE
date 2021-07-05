@@ -1,10 +1,11 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
 #include <CryAnimation/ICryAnimation.h>
 #include "SkeletonAnim.h"
 #include "CharacterInstance.h"
+#include <CryThreading/IJobManager.h>
 
 class CAttachmentBONE;
 class CAttachmentManager;
@@ -36,27 +37,27 @@ struct SContext
 {
 	SContext()
 		: pInstance(nullptr)
-		, pBone(nullptr)
-		, pParent(nullptr)
+		, attachmentNameCRC(0)
 		, numChildren(0)
+		, parentSlot(-1)
 		, slot(-1)
 		, pCommandBuffer(nullptr)
 		, job(nullptr)
-		, state(EState::Unstarted) 
+		, state(EState::Unstarted)
 	{
 	}
 
-	void Initialize(CCharInstance* pInst, const CAttachmentBONE* pBone, const CCharInstance* pParent, int numChildren);
+	void Initialize(CCharInstance* pInst, const IAttachment* pAttachment, int parentSlot, int numChildren);
 
 	//! Checks if computation of this processing context is currently in progress.
 	//! \return True if computation is still in progress. False if computation did not yet start or already finished for the current frame.
 	bool IsInProgress() const;
 
 	_smart_ptr<CCharInstance> pInstance;
-	const CAttachmentBONE*    pBone;
-	const CCharInstance*      pParent;
+	uint32                    attachmentNameCRC;
 
 	int                       numChildren;
+	int                       parentSlot;
 	int                       slot;
 
 	Command::CBuffer*         pCommandBuffer;
@@ -67,6 +68,7 @@ struct SContext
 		Unstarted,
 		StartAnimationProcessed,
 		JobExecuted,
+		JobCulled,
 		JobSkipped,
 		Finished,
 		Failure
@@ -115,6 +117,28 @@ public:
 		}
 	}
 	template<class Function>
+	void ExecuteForContextAndAllChildrenRecursivelyWithoutStateChange(int parentIndex, Function f)
+	{
+		const int start = parentIndex;
+		const int end = start + m_contexts[parentIndex].numChildren + 1;
+		for (int i = start; i < end; ++i)
+		{
+			auto& ctx = m_contexts[i];
+			f(ctx);
+		}
+	}
+	template<class Function>
+	void ExecuteForAllParentsRecursively(int slot, Function f)
+	{
+		const auto parentSlot = m_contexts[slot].parentSlot;
+		if (parentSlot >= 0)
+		{
+			ExecuteForAllParentsRecursively(parentSlot, f);
+			auto& parentCtx = m_contexts[parentSlot];
+			parentCtx.state = f(parentCtx);
+		}
+	}
+	template<class Function>
 	void ExecuteForContext(int index, Function f)
 	{
 		auto& ctx = m_contexts[index];
@@ -125,6 +149,15 @@ public:
 	{
 		const int num = m_numContexts;
 		for (int i = 0; i < num; ++i)
+		{
+			auto& ctx = m_contexts[i];
+			ctx.state = f(ctx);
+		}
+	}
+	template<class Function>
+	void ExecuteForAllInReverseOrder(Function f)
+	{
+		for (int i = m_numContexts - 1; i >= 0; --i)
 		{
 			auto& ctx = m_contexts[i];
 			ctx.state = f(ctx);

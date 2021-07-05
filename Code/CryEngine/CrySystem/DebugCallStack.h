@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 // -------------------------------------------------------------------------
 //  File name:   DebugCallStack.h
@@ -15,6 +15,8 @@
 #define __DebugCallStack_h__
 
 #include "IDebugCallStack.h"
+#include <CrySystem/IValidator.h>
+#include <map>
 
 #if CRY_PLATFORM_WINDOWS
 
@@ -22,6 +24,9 @@
 const int MAX_DEBUG_STACK_ENTRIES_FILE_DUMP = 12;
 
 struct ISystem;
+struct IConsoleCmdArgs;
+struct ICVar;
+struct SFileVersion;
 
 //!============================================================================
 //!
@@ -65,6 +70,9 @@ public:
 	// Simulates generation of the crash report.
 	void           GenerateCrashReport();
 
+	// Creates a minimal necessary crash reporting, without UI.
+	void           MinimalExceptionReport(EXCEPTION_POINTERS* exception_pointer);
+
 	// Register CVars needed for debug call stack.
 	void           RegisterCVars();
 
@@ -74,6 +82,7 @@ protected:
 	void                    doneSymbols();
 
 	static void             RemoveOldFiles();
+	static void             MoveFile(const char* szFileNameOld, const char* szFileNameNew);
 	static void             RemoveFile(const char* szFileName);
 
 	NO_INLINE void          FillStackTrace(int maxStackEntries = MAX_DEBUG_STACK_ENTRIES, int skipNumFunctions = 0, HANDLE hThread = GetCurrentThread());
@@ -83,6 +92,9 @@ protected:
 
 	int                     updateCallStack(EXCEPTION_POINTERS* exception_pointer);
 	void                    LogExceptionInfo(EXCEPTION_POINTERS* exception_pointer);
+
+	void                    WriteErrorLog( const char *filename,const char *writeString );
+	void                    CaptureScreenshot();
 
 	bool                    BackupCurrentLevel();
 	int                     SubmitBug(EXCEPTION_POINTERS* exception_pointer);
@@ -101,18 +113,45 @@ protected:
 	char             m_excAddr[80];
 	char             m_excCallstack[s_iCallStackSize];
 
-	bool             m_symbols;
-	bool             m_bCrash;
-	const char*      m_szBugMessage;
+	bool             m_symbols = false;
+	bool             m_bCrash = false;
+	const char*      m_szBugMessage = nullptr;
 
-	ISystem*         m_pSystem;
+	ISystem*         m_pSystem = nullptr;
 
 	CONTEXT          m_context;
 
 	TModules         m_modules;
 
-	LPTOP_LEVEL_EXCEPTION_FILTER m_previousHandler;
+	LPTOP_LEVEL_EXCEPTION_FILTER m_previousHandler = NULL;
+
+	string           m_outputPath;
 };
+
+#ifdef CRY_USE_CRASHRPT
+
+#include "CrashRpt.h"
+class CCrashRpt
+{
+public:
+	static void RegisterCVars();
+
+	static bool InstallHandler();
+
+	static void UninstallHandler();
+
+	static int CALLBACK CrashCallback(CR_CRASH_CALLBACK_INFO* pInfo);
+
+	static void CmdGenerateCrashReport(IConsoleCmdArgs*);
+
+	static void FatalError();
+
+	static void ReInstallCrashRptHandler(ICVar*);
+
+	static SFileVersion GetSystemVersionInfo();
+
+};
+#endif // CRY_USE_CRASHRPT
 
 #endif // CRY_PLATFORM_WINDOWS
 

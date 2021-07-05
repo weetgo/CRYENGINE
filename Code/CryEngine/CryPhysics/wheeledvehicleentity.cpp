@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 
@@ -10,6 +10,7 @@
 #include "physicalplaceholder.h"
 #include "physicalentity.h"
 #include "geoman.h"
+#include "trimesh.h"
 #include "physicalworld.h"
 #include "rigidentity.h"
 #include "wheeledvehicleentity.h"
@@ -34,7 +35,7 @@ CWheeledVehicleEntity::CWheeledVehicleEntity(CPhysicalWorld *pworld, IGeneralMem
 	, m_steer(0.0f)
 	, m_ackermanOffset(0.0f)
 	, m_clutch(0.0f)
-	, m_nGears(2)
+	, m_nGears(3)
 	, m_iCurGear(1)
 	, m_maxGear(127)
 	, m_minGear(0)
@@ -50,7 +51,7 @@ CWheeledVehicleEntity::CWheeledVehicleEntity(CPhysicalWorld *pworld, IGeneralMem
 	, m_lockVehicle(0)
 	, m_pullTilt(0.0f)
 	, m_drivingTorque(0.0f)
-	, m_maxTilt(0.866f)
+	, m_maxTilt(0.5f)
 	, m_wheelMassScale(0.0f)
 {
 	m_engineMinw = m_engineMaxw*0.05f;
@@ -59,7 +60,8 @@ CWheeledVehicleEntity::CWheeledVehicleEntity(CPhysicalWorld *pworld, IGeneralMem
 	m_engineShiftDownw = m_engineMaxw*0.2f;	
 
 	m_gears[0] = -1.0f;
-	m_gears[1] = 1.0f;
+	m_gears[1] = 1.0f; // neutral, unused
+	m_gears[2] = 1.0f;
 
 	m_EminRigid = m_Emin;
 	m_maxAllowedStepRigid = m_maxAllowedStep;
@@ -143,7 +145,7 @@ int CWheeledVehicleEntity::SetParams(pe_params *_params, int bThreadSafe)
 		if (!is_unused(params->steerTrackNeutralTurn)) 
 			m_kSteerToTrack = params->steerTrackNeutralTurn>0 ? 2.0f/params->steerTrackNeutralTurn : 0;
     if (!is_unused(params->pullTilt)) m_pullTilt = params->pullTilt; 
-		if (!is_unused(params->maxTilt)) m_maxTilt = params->maxTilt;
+		if (!is_unused(params->maxTilt)) m_maxTilt = cos(params->maxTilt);
 		if (!is_unused(params->bKeepTractionWhenTilted)) m_bKeepTractionWhenTilted = params->bKeepTractionWhenTilted;
 		if (!is_unused(params->wheelMassScale)) m_wheelMassScale = params->wheelMassScale;
 		return 1;
@@ -203,7 +205,6 @@ int CWheeledVehicleEntity::GetParams(pe_params *_params) const
 		params->engineIdleRPM = m_engineIdlew*(60.0/(2*g_PI));
 		params->engineShiftUpRPM = m_engineShiftUpw*(60.0/(2*g_PI));
 		params->engineShiftDownRPM = m_engineShiftDownw*(60.0/(2*g_PI));
-		params->engineIdleRPM = m_engineIdlew*(60.0/(2*g_PI));
 		params->engineStartRPM = m_engineStartw*(60.0/(2*g_PI));
 		params->clutchSpeed = m_clutchSpeed;
 		params->nGears = m_nGears;
@@ -638,8 +639,8 @@ int CWheeledVehicleEntity::AddGeometry(phys_geometry *pgeom, pe_geomparams *_par
 		m_susp[idx].contact.Pspare = 0;
 		m_susp[idx].pCollEvent = 0;
 		box bbox; pgeom->pGeom->GetBBox(&bbox);
-		m_susp[idx].r = max(max(bbox.size.x,bbox.size.y),bbox.size.z);
-		m_susp[idx].width = min(min(bbox.size.x,bbox.size.y),bbox.size.z);
+		m_susp[idx].r = max(max(bbox.size.x,bbox.size.y),bbox.size.z)*params->scale;
+		m_susp[idx].width = min(min(bbox.size.x,bbox.size.y),bbox.size.z)*params->scale;
 		assert(density);
 		m_susp[idx].Iinv = 1.0f/(max(max(pgeom->Ibody.x,pgeom->Ibody.y),pgeom->Ibody.z)*density);
 		m_susp[idx].rinv = 1.0f/m_susp[idx].r;
@@ -713,7 +714,7 @@ void CWheeledVehicleEntity::ComputeBBox(Vec3 *BBox, int flags)
 
 void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 {
-	FUNCTION_PROFILER( GetISystem(),PROFILE_PHYSICS );
+	CRY_PROFILE_FUNCTION(PROFILE_PHYSICS );
 
 	int iCaller = get_iCaller_int();
 	int i,j,nents,ient,iwheel,ncontacts,icont,bRayCast,bHasContacts,ient1,j1,bHasMatSubst=0;
@@ -739,12 +740,12 @@ void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 			r = m_BBox[1]-m_BBox[0]; r.x = max(max(r.x,r.y),r.z);
 			BBoxEnt[0]=Vec3(r.x); BBoxEnt[1]=Vec3(-r.x);
 			for(j1=0; j1<pentlist[i]->m_nParts; j1++) {
+				pentlist[i]->GetPartTransform(j1, gwd[1].offset,gwd[1].R,gwd[1].scale, this);
 				pentlist[i]->m_parts[j1].pPhysGeomProxy->pGeom->GetBBox(&abox);
-				gwd[1].R = Matrix33(!m_qNew*pentlist[i]->m_qrot*pentlist[i]->m_parts[j1].q);
-				abox.Basis *= gwd[1].R.T();
+				//gwd[1].R = Matrix33(!m_qNew*pentlist[i]->m_qrot*pentlist[i]->m_parts[j1].q);
+				abox.Basis *= gwd[1].R.T() * Matrix33(m_qNew);
 				r = (abox.size*abox.Basis.Fabs())*pentlist[i]->m_parts[j1].scale;
-				ptcw = (pentlist[i]->m_pos + pentlist[i]->m_qrot*(pentlist[i]->m_parts[j1].pos + 
-					pentlist[i]->m_parts[j1].q*abox.center*pentlist[i]->m_parts[j1].scale) - m_posNew)*m_qNew;
+				ptcw = (gwd[1].offset + gwd[1].R*abox.center*gwd[1].scale - m_posNew)*m_qNew;
 				BBoxEnt[0] = min(BBoxEnt[0], ptcw-r);
 				BBoxEnt[1] = max(BBoxEnt[1], ptcw+r);
 			}
@@ -838,20 +839,20 @@ void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 			gwd[0].centerOfMass = m_body.pos;
 			ip.time_interval = time_interval*1.4f;
 		}
+		Vec3 partBBox[2];
+		newlen = m_susp[iwheel].fullen;
 
 		for(ient=0;ient<nents;ient++) for(j=0; j<pentlist[ient]->m_nParts; j++) 
 		if (pentlist[ient]->m_parts[j].flags & m_susp[iwheel].flagsCollider0 && 
-				((pentlist[ient]->m_parts[j].BBox[1]-pentlist[ient]->m_parts[j].BBox[0]).len2()==0 || AABB_overlap(pentlist[ient]->m_parts[j].BBox,BBoxWheel))) 
+				((pentlist[ient]->m_parts[j].BBox[1]-pentlist[ient]->m_parts[j].BBox[0]).len2()==0 || AABB_overlap(pentlist[ient]->GetPartBBox(j,partBBox,this),BBoxWheel))) 
 		{
-			gwd[1].offset = pentlist[ient]->m_pos + pentlist[ient]->m_qrot*pentlist[ient]->m_parts[j].pos;
-			gwd[1].R = Matrix33(pentlist[ient]->m_qrot*pentlist[ient]->m_parts[j].q);
-			gwd[1].scale = pentlist[ient]->m_parts[j].scale;
-
+			pentlist[ient]->GetPartTransform(j, gwd[1].offset,gwd[1].R,gwd[1].scale, this);
+			IGeometry *pGeom1 = pentlist[ient]->m_parts[j].pPhysGeomProxy->pGeom;
 			if (!bRayCast)
-				ncontacts = m_parts[i].pPhysGeomProxy->pGeom->Intersect(pentlist[ient]->m_parts[j].pPhysGeomProxy->pGeom, gwd+0,gwd+1, &ip, pcontacts);
+				ncontacts = m_parts[i].pPhysGeomProxy->pGeom->Intersect(pGeom1, gwd+0,gwd+1, &ip, pcontacts);
 			else {
 				ip.bSweepTest = false;
-				ncontacts = pentlist[ient]->m_parts[j].pPhysGeomProxy->pGeom->Intersect(&aray, gwd+1,0, &ip, pcontacts);
+				ncontacts = pGeom1->Intersect(&aray, gwd+1,0, &ip, pcontacts);
 				for(icont=0; icont<ncontacts; icont++)
 					pcontacts[icont].n.Flip();
 				ip.bSweepTest = true;
@@ -859,6 +860,7 @@ void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 
 			for(icont=0; icont<ncontacts; icont++) {
 				pcontacts[icont].t -= m_susp[iwheel].r*bRayCast;
+				newlen = m_susp[iwheel].curlen;
 				if (!ip.bSweepTest) {
 					if (pcontacts[icont].vel>0) {
 						if (!bHasContacts && sqr(pcontacts[icont].t)>unproj.len2())
@@ -867,8 +869,21 @@ void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 						pcontacts[icont].n = -pcontacts[icont].dir;
 				}
 				tcur = ip.bSweepTest ? ip.time_interval-pcontacts[icont].t : pcontacts[icont].t*-(pcontacts[icont].dir*axisz);
+				if (pcontacts[icont].iFeature[1] & 0xA0) switch(pGeom1->GetType()) {
+				case GEOM_HEIGHTFIELD: case GEOM_TRIMESH:
+					// for mesh edge contacts, check if the contact normal is between the normals of the corresponding triangles; correct it otherwise
+					// (for sweep checks contact normal can be an incorrect open-edge one due to premature check exit on distance limit)
+					CTriMesh *pMesh = (CTriMesh*)pGeom1;
+					int ibuddy = pMesh->m_pTopology[pcontacts[icont].iPrim[1]].ibuddy[pcontacts[icont].iFeature[1] & 3];
+					if (ibuddy>=0) {
+						Vec3 ntri[2]={ pMesh->m_pNormals[pcontacts[icont].iPrim[1]], pMesh->m_pNormals[ibuddy] };
+						Vec3 ncnt = -pcontacts[icont].n*gwd[1].R;
+						if ((ncnt^ntri[0])*(ncnt^ntri[1])>0)
+							pcontacts[icont].n = -(gwd[1].R*(ntri[0]+ntri[1]).normalized());
+					}
+				}
 				n_accum += pcontacts[icont].n*-tcur;
-				if (fabs_tpl(pcontacts[icont].n*axisy) < m_maxTilt) {
+				if (fabs_tpl(pcontacts[icont].n*axisz) > m_maxTilt) {
 					if (tcur>tmax/*&& (ip.bSweepTest || pcontacts[icont].vel>0)*/)	{
 						tmax = tcur; dirmax = pcontacts[icont].dir; m_susp[iwheel].bContact = 1;
 						m_susp[iwheel].pent = pentlist[ient]; m_susp[iwheel].ipart = j;
@@ -887,8 +902,7 @@ void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 							m_susp[iwheel].surface_idx[1] = pentlist[ient1]->GetMatId(pentlist[ient1]->m_parts[j1].pPhysGeom->surface_idx,j1);
 					}
 					AddCollider(pentlist[ient]);
-				} else if (pcontacts[icont].n*axisz > -0.01f && // if contact normal is too steep (but not negative), 
-									pentlist[ient]->GetRigidBody(j)->Minv < m_body.Minv*10.f && // ..and colliding body is not loo light (too avoid degeneracy)
+				} else if (pentlist[ient]->GetRigidBody(j)->Minv < m_body.Minv*10.f && // if colliding body is not loo light (too avoid degeneracy)
 									(m_kSteerToTrack==0 || m_susp[iwheel].fullen==0)) // never do it for tank's road wheels
 					tmaxTilted = max_safe(tmaxTilted,tcur);
 			}
@@ -898,11 +912,10 @@ void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 		//endwheel:
 		if (tmaxTilted>tmax*1.01f) {
 			m_parts[i].flags = m_susp[iwheel].flags0; m_parts[i].flagsCollider = m_susp[iwheel].flagsCollider0;
-			m_susp[iwheel].bContact &= m_bKeepTractionWhenTilted; // treat wheel as part of vehicle's rigid geometry						
+			m_susp[iwheel].bContact &= m_bKeepTractionWhenTilted; // treat wheel as part of vehicle's rigid geometry
 		}
 		m_posNew += unproj;
 		m_body.pos += unproj;
-		newlen = m_susp[iwheel].fullen;
 
 		if (m_susp[iwheel].bContact) {
 			m_susp[iwheel].vrel = m_body.v+(m_body.w^m_susp[iwheel].ptcontact-m_body.pos);
@@ -928,6 +941,7 @@ void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 		}
 		m_susp[iwheel].curlen = min(newlen, m_susp[iwheel].curlen+time_interval*7.0f);
 		m_susp[iwheel].pos.z += m_susp[iwheel].fullen-m_susp[iwheel].curlen;
+		m_parts[iwheel+m_nHullParts].pos = m_susp[iwheel].pos;
 	}
 
 	if (bFakeInnerWheels) {
@@ -961,6 +975,7 @@ void CWheeledVehicleEntity::CheckAdditionalGeometry(float time_interval)
 				if (m_susp[iwheel].pbody)
 					m_susp[iwheel].vrel -= m_susp[iwheel].pbody->v + (m_susp[iwheel].pbody->w^m_susp[iwheel].ptcontact-m_susp[iwheel].pbody->pos);
 				m_susp[iwheel].contact.vreq.zero();
+				m_parts[iwheel+m_nHullParts].pos = m_susp[iwheel].pos;
 			}
 	}
 
@@ -984,7 +999,7 @@ float CWheeledVehicleEntity::ComputeDrivingTorque(float time_interval)
 	if (m_nGears==0) return 0.f;
 
 	float wwheel=0,T=0,enginePower,power,w,wscale[2]={1,1},rTscale;
-	int i,iNewGear,nContacts,sg=sgnnz(m_gears[m_iCurGear]);
+	int i,iNewGear,nContacts;
 	if (m_kSteerToTrack!=0 && fabs_tpl(m_steer)>0.01f) {
 		wscale[i=isneg(m_steer)] = max(-1.0f,1.0f-fabs_tpl(m_steer*m_kSteerToTrack));
 		if (fabs_tpl(wscale[i])<0.05f) wscale[i] = sgnnz(wscale[i])*0.05f;
@@ -1423,7 +1438,7 @@ void CWheeledVehicleEntity::AddAdditionalImpulses(float time_interval)
 		m_Ffriction = m_body.P-Pbefore; m_Tfriction = m_body.L-Lbefore;
 
 #ifdef _DEBUG
-#if CRY_PLATFORM_WINDOWS && CRY_PLATFORM_64BIT
+#if CRY_PLATFORM_WINDOWS
 		assert(m_Ffriction.len2()>=0);
 #else
 		if (!(m_Ffriction.len2()>=0))
@@ -1774,7 +1789,8 @@ void CWheeledVehicleEntity::DrawHelperInformation(IPhysRenderer *pRenderer, int 
 
 void CWheeledVehicleEntity::GetMemoryStatistics(ICrySizer *pSizer) const
 {
-	CRigidEntity::GetMemoryStatistics(pSizer);
 	if (GetType()==PE_WHEELEDVEHICLE)
 		pSizer->AddObject(this, sizeof(CWheeledVehicleEntity));
+	CRigidEntity::GetMemoryStatistics(pSizer);
+	pSizer->AddObject(m_susp, (m_nParts-m_nHullParts)*sizeof(m_susp[0]));
 }

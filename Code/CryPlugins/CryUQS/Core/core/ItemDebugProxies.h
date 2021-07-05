@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
@@ -6,9 +6,9 @@
 
 // *INDENT-OFF* - <hard to read code and declarations due to inconsistent indentation>
 
-namespace uqs
+namespace UQS
 {
-	namespace core
+	namespace Core
 	{
 
 		//===================================================================================
@@ -22,10 +22,6 @@ namespace uqs
 		public:
 			virtual               ~CItemDebugProxyBase() {}
 
-			// - draws approximation geometry of the item immediately using the static Draw() methods of the CDebugRenderPrimitive_* classes
-			// - the "bHighlight" parameter specifies whether the item is currently the one that has the camera focus (and if so, then more debugging details will be drawn)
-			virtual void          Draw(const ColorF& color, bool bHighlight) const = 0;
-
 			// this is the position where we will add more details about the item in the 3D render world
 			virtual Vec3          GetPivot() const = 0;
 
@@ -34,9 +30,6 @@ namespace uqs
 			virtual bool          GetDistanceToCameraView(const SDebugCameraView& cameraView, float& dist) const = 0;
 
 			virtual void          Serialize(Serialization::IArchive& ar) = 0;
-
-		protected:
-			static const int      s_flags3D = e_Mode3D | e_AlphaBlended | e_DrawInFrontOff | e_FillModeSolid | e_CullModeBack | e_DepthWriteOn | e_DepthTestOn;
 		};
 
 		//===================================================================================
@@ -45,7 +38,7 @@ namespace uqs
 		//
 		//===================================================================================
 
-		class CItemDebugProxy_Sphere : public IItemDebugProxy_Sphere, public CItemDebugProxyBase
+		class CItemDebugProxy_Sphere : public CItemDebugProxyBase, public IItemDebugProxy_Sphere
 		{
 		public:
 			explicit              CItemDebugProxy_Sphere();
@@ -55,7 +48,6 @@ namespace uqs
 			// ~IItemDebugProxy_Sphere
 
 			// CItemDebugProxyBase
-			virtual void          Draw(const ColorF& color, bool bHighlight) const override;
 			virtual Vec3          GetPivot() const override;
 			virtual bool          GetDistanceToCameraView(const SDebugCameraView& cameraView, float& dist) const override;
 			virtual void          Serialize(Serialization::IArchive& ar) override;
@@ -65,15 +57,14 @@ namespace uqs
 			Vec3                  m_pos;
 			float                 m_radius;
 		};
-		SERIALIZATION_CLASS_NAME(CItemDebugProxyBase, CItemDebugProxy_Sphere, "CItemDebugProxy_Sphere", "");
-
+		
 		//===================================================================================
 		//
 		// CItemDebugProxy_Path
 		//
 		//===================================================================================
 
-		class CItemDebugProxy_Path : public IItemDebugProxy_Path, public CItemDebugProxyBase
+		class CItemDebugProxy_Path : public CItemDebugProxyBase, public IItemDebugProxy_Path
 		{
 		public:
 			explicit              CItemDebugProxy_Path();
@@ -84,7 +75,6 @@ namespace uqs
 			// ~IItemDebugProxy_Path
 
 			// CItemDebugProxyBase
-			virtual void          Draw(const ColorF& color, bool bHighlight) const override;
 			virtual Vec3          GetPivot() const override;
 			virtual bool          GetDistanceToCameraView(const SDebugCameraView& cameraView, float& dist) const override;
 			virtual void          Serialize(Serialization::IArchive& ar) override;
@@ -94,7 +84,6 @@ namespace uqs
 			std::vector<Vec3>     m_pathPoints;
 			bool                  m_bClosed;
 		};
-		SERIALIZATION_CLASS_NAME(CItemDebugProxyBase, CItemDebugProxy_Path, "CItemDebugProxy_Path", "");
 
 		//===================================================================================
 		//
@@ -102,7 +91,7 @@ namespace uqs
 		//
 		//===================================================================================
 
-		class CItemDebugProxy_AABB : public IItemDebugProxy_AABB, public CItemDebugProxyBase
+		class CItemDebugProxy_AABB : public CItemDebugProxyBase, public IItemDebugProxy_AABB
 		{
 		public:
 			explicit              CItemDebugProxy_AABB();
@@ -112,7 +101,6 @@ namespace uqs
 			// ~IItemDebugProxy_AABB
 
 			// CItemDebugProxyBase
-			virtual void          Draw(const ColorF& color, bool bHighlight) const override;
 			virtual Vec3          GetPivot() const override;
 			virtual bool          GetDistanceToCameraView(const SDebugCameraView& cameraView, float& dist) const override;
 			virtual void          Serialize(Serialization::IArchive& ar) override;
@@ -121,7 +109,5 @@ namespace uqs
 		private:
 			AABB                  m_aabb;
 		};
-		SERIALIZATION_CLASS_NAME(CItemDebugProxyBase, CItemDebugProxy_AABB, "CItemDebugProxy_AABB", "");
-
 	}
 }

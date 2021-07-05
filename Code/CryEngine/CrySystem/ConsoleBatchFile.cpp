@@ -1,21 +1,8 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
-
-/*************************************************************************
-   -------------------------------------------------------------------------
-   $Id$
-   $DateTime$
-   Description: Executes an ASCII batch file of console commands...
-
-   -------------------------------------------------------------------------
-   History:
-   - 19:04:2006   10:38 : Created by Jan Müller
-   - 26:06:2006           Modified by Timur.
-
-*************************************************************************/
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "ConsoleBatchFile.h"
-#include <CrySystem/IConsole.h>
+#include <CrySystem/ConsoleRegistration.h>
 #include <CrySystem/ISystem.h>
 #include "XConsole.h"
 #include <CryString/CryPath.h>
@@ -23,130 +10,75 @@
 #include "System.h"
 #include "SystemCFG.h"
 
-IConsole* CConsoleBatchFile::m_pConsole = NULL;
-
 void CConsoleBatchFile::Init()
 {
-	m_pConsole = gEnv->pConsole;
-	REGISTER_COMMAND("exec", (ConsoleCommandFunc)ExecuteFileCmdFunc, 0, "executes a batch file of console commands");
+	REGISTER_COMMAND("exec", (ConsoleCommandFunc)ExecuteFileCmdFunc, 0, "Executes a batch file of console commands");
 }
 
-//////////////////////////////////////////////////////////////////////////
 void CConsoleBatchFile::ExecuteFileCmdFunc(IConsoleCmdArgs* args)
 {
-	if (!m_pConsole)
-		Init();
-
-	if (!args->GetArg(1))
+	if (args->GetArgCount() < 2)
 		return;
 
-	ExecuteConfigFile(args->GetArg(1));
-}
-
-//////////////////////////////////////////////////////////////////////////
-bool CConsoleBatchFile::ExecuteConfigFile(const char* sFilename)
-{
-	if (!m_pConsole)
-		Init();
-
-	string filename;
-	string root = gEnv->pSystem->GetRootFolder();
-	if (!root.empty())
-		filename = PathUtil::Make(root, PathUtil::GetFile(sFilename));
-	else
-		filename = sFilename;
-	if (strlen(PathUtil::GetExt(filename)) == 0)
-	{
-		filename = PathUtil::ReplaceExtension(filename, "cfg");
-	}
-
-#if defined(CVARS_WHITELIST)
-	bool ignoreWhitelist = true;
-	if (stricmp(sFilename, "autoexec.cfg") == 0)
-	{
-		ignoreWhitelist = false;
-	}
-#endif // defined(CVARS_WHITELIST)
-
-	//////////////////////////////////////////////////////////////////////////
+	const string filename = args->GetArg(1);
 	CCryFile file;
-
 	{
-		const char* szLog = "Executing console batch file (try game,config,root):";
-		string filenameLog;
-		string sfn = PathUtil::GetFile(filename);
-
 		if (!CSystemConfiguration::OpenFile(filename, file, ICryPak::FOPEN_ONDISK))
 		{
-			CryLog("%s \"%s\" not found!", szLog, filename.c_str());
-			return false;
+			CryLog("Searching console batch file (try game, config, root): \"%s\" not found!", filename.c_str());
+			return;
 		}
-		filenameLog = file.GetFilename();
-		CryLog("%s \"%s\" found in %s ...", szLog, filename.c_str(), filenameLog.c_str());
+		CryLog("Found console batch file \"%s\" at %s", filename.c_str(), file.GetFilename());
 	}
 
-	int nLen = file.GetLength();
-	char* sAllText = new char[nLen + 16];
-	file.ReadRaw(sAllText, nLen);
-	sAllText[nLen] = '\0';
-	sAllText[nLen + 1] = '\0';
+	// Only circumvent whitelist when the file was in an archive, since we expect archives to be signed in release mode when whitelist is used
+	// Note that we still support running release mode without signed / encrypted archives, however this means that a conscious decision to sacrifice security has already been made.
+#ifdef RELEASE
+	const bool ignoreWhitelist = file.IsInPak();
+#else
+	const bool ignoreWhitelist = true;
+#endif
 
-	/*
-	   This can't work properly as ShowConsole() can be called during the execution of the scripts,
-	   which means bConsoleStatus is outdated and must not be set at the end of the function
-
-	   bool bConsoleStatus = ((CXConsole*)m_pConsole)->GetStatus();
-	   ((CXConsole*)m_pConsole)->SetStatus(false);
-	 */
-
-	char* strLast = sAllText + nLen;
-	char* str = sAllText;
+	std::vector<char> fileContents(file.GetLength() + 1);
+	file.ReadRaw(fileContents.data(), file.GetLength());
+	fileContents.back() = '\0';
+	
+	char* const strLast = &fileContents.back() + 1;
+	char* str = fileContents.data();
 	while (str < strLast)
 	{
-		char* s = str;
+		char* szLineStart = str;
+		// find the first line break
 		while (str < strLast && *str != '\n' && *str != '\r')
 			str++;
+		// clear it to handle the line as one string
 		*str = '\0';
 		str++;
+		// and skip any remaining line break chars
 		while (str < strLast && (*str == '\n' || *str == '\r'))
 			str++;
 
-		string strLine = s;
-
-		//trim all whitespace characters at the beginning and the end of the current line and store its size
+		//trim all whitespace characters at the beginning and the end of the current line
+		string strLine = szLineStart;
 		strLine.Trim();
-		size_t strLineSize = strLine.size();
 
-		//skip comments, comments start with ";" or "--" but may have preceding whitespace characters
-		if (strLineSize > 0)
-		{
-			if (strLine[0] == ';')
-				continue;
-			else if (strLine.find("--") == 0)
-				continue;
-		}
 		//skip empty lines
-		else
+		if (strLine.empty())
 			continue;
 
-#if defined(CVARS_WHITELIST)
-		if ((ignoreWhitelist) || (gEnv->pSystem->GetCVarsWhiteList()->IsWhiteListed(strLine, false)))
-#endif // defined(CVARS_WHITELIST)
+		//skip comments, comments start with ";" or "--" (any preceding whitespaces have already been trimmed)
+		if (strLine[0] == ';' || strLine.find("--") == 0)
+			continue;
+
+		if (ignoreWhitelist || (gEnv->pSystem->IsCVarWhitelisted(strLine, false)))
 		{
-			m_pConsole->ExecuteString(strLine);
+			gEnv->pConsole->ExecuteString(strLine);
 		}
 #if defined(DEDICATED_SERVER)
-	#if defined(CVARS_WHITELIST)
 		else
 		{
-			gEnv->pSystem->GetILog()->LogError("Failed to execute command: '%s' as it is not whitelisted\n", strLine.c_str());
+			gEnv->pSystem->GetILog()->LogError("Failed to apply CVar/ execute command '%s' as it is not whitelisted\n", strLine.c_str());
 		}
-	#endif // defined(CVARS_WHITELIST)
-#endif   // defined(DEDICATED_SERVER)
+#endif // defined(DEDICATED_SERVER)
 	}
-	// See above
-	//	((CXConsole*)m_pConsole)->SetStatus(bConsoleStatus);
-
-	delete[]sAllText;
-	return true;
 }

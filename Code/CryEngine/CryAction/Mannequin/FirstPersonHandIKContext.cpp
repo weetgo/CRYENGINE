@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 //
 ////////////////////////////////////////////////////////////////////////////
@@ -19,9 +19,9 @@ CFirstPersonHandIKContext::SParams::SParams(IDefaultSkeleton* pIDefaultSkeleton)
 	m_leftHandTargetIdx = pIDefaultSkeleton->GetJointIDByName("Bip01 LHand2Weapon_IKTarget");
 	m_rightBlendIkIdx = pIDefaultSkeleton->GetJointIDByName("Bip01 RHand2RiflePos_IKBlend");
 
-	assert(m_weaponTargetIdx != -1);
-	assert(m_leftHandTargetIdx != -1);
-	assert(m_rightBlendIkIdx != -1);
+	CRY_ASSERT(m_weaponTargetIdx != -1);
+	CRY_ASSERT(m_leftHandTargetIdx != -1);
+	CRY_ASSERT(m_rightBlendIkIdx != -1);
 }
 
 CFirstPersonHandIKContext::CFirstPersonHandIKContext()
@@ -41,7 +41,7 @@ void CFirstPersonHandIKContext::Initialize(ICharacterInstance* pCharacterInstanc
 		return;
 
 	m_pCharacterInstance = pCharacterInstance;
-	CryCreateClassInstance("AnimationPoseModifier_OperatorQueue", m_pPoseModifier);
+	CryCreateClassInstanceForInterface(cryiidof<IAnimationOperatorQueue>(), m_pPoseModifier);
 	m_params = SParams(&m_pCharacterInstance->GetIDefaultSkeleton());
 }
 

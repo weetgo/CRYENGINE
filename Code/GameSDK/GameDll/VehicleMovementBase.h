@@ -1,7 +1,8 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
+#include <CryRenderer/IRenderer.h> // required by ParticleParams.h
 #include <CryParticleSystem/ParticleParams.h>
 #include <IVehicleSystem.h>
 #include <IForceFeedbackSystem.h>
@@ -378,7 +379,7 @@ public:
 	virtual void EnableMovementProcessing(bool enable) override { m_bMovementProcessingEnabled = enable; }
 	virtual bool IsMovementProcessingEnabled() override { return m_bMovementProcessingEnabled; }
 
-	virtual void ProcessEvent(SEntityEvent& event) override;
+	virtual void ProcessEvent(const SEntityEvent& event) override;
 	virtual CryCriticalSection* GetNetworkLock() override { return &m_networkLock; }
 
 	virtual float GetEnginePedal() override { return m_movementAction.power; }
@@ -407,10 +408,10 @@ public:
 	}
 
 	virtual IEntityAudioComponent* GetAudioProxy() const override;
-	virtual AudioControlId GetPrimaryWeaponAudioTrigger() const override { return m_audioControlIDs[eSID_VehiclePrimaryWeapon]; }
-	virtual AudioControlId GetPrimaryWeaponAudioStopTrigger() const override { return m_audioControlIDs[eSID_VehicleStopPrimaryWeapon]; }
-	virtual AudioControlId GetSecondaryWeaponAudioTrigger() const override { return m_audioControlIDs[eSID_VehicleSecondaryWeapon]; }
-	virtual AudioControlId GetSecondaryWeaponAudioStopTrigger() const override { return m_audioControlIDs[eSID_VehicleStopSecondaryWeapon]; }
+	virtual CryAudio::ControlId GetPrimaryWeaponAudioTrigger() const override { return m_audioControlIDs[eSID_VehiclePrimaryWeapon]; }
+	virtual CryAudio::ControlId GetPrimaryWeaponAudioStopTrigger() const override { return m_audioControlIDs[eSID_VehicleStopPrimaryWeapon]; }
+	virtual CryAudio::ControlId GetSecondaryWeaponAudioTrigger() const override { return m_audioControlIDs[eSID_VehicleSecondaryWeapon]; }
+	virtual CryAudio::ControlId GetSecondaryWeaponAudioStopTrigger() const override { return m_audioControlIDs[eSID_VehicleStopSecondaryWeapon]; }
 
 protected:
 
@@ -425,7 +426,7 @@ protected:
 	void StopTrigger(EVehicleMovementSound eSID);
 	void StopAllTriggers();
 	void ResetAudioParams();
-	const AudioControlId& GetAudioControlID(EVehicleMovementSound eSID);
+	const CryAudio::ControlId& GetAudioControlID(EVehicleMovementSound eSID);
 	void SetSoundParam(EVehicleMovementSound eSID, const char* param, float value);
 
 #if ENABLE_VEHICLE_DEBUG
@@ -516,7 +517,7 @@ protected:
 	float m_damage;
 	bool m_bFirstHit;
 
-	AudioControlId m_audioControlIDs[eSID_Max];
+	CryAudio::ControlId m_audioControlIDs[eSID_Max];
 	
 	Vec3 m_enginePos;
 	float m_runSoundDelay;  

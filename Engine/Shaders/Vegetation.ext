@@ -88,10 +88,26 @@ Property
 
 Property
 {
+  Name = %BLENDTERRAIN
+  Mask = 0x40000
+  Property    (Terrainblend)
+  Description (Normal-mapped diffuse layer from terrain blended below the base material)
+}
+
+Property
+{
   Name = %VERTCOLORS
   Mask = 0x100000
   DependencySet = $UserEnabled
   Hidden
+}
+
+Property
+{
+  Name = %VEGETATION_EXT_BENDING
+  Mask = 0x800000
+  Property    (Extended Bending)
+  Description (Extended bending, valid for trunks, leaves and grass. Make sure to paint required vertex colors also)
 }
 
 Property

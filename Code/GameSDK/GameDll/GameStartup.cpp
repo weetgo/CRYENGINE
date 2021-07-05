@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "GameStartup.h"
@@ -12,6 +12,7 @@
 #include <CryNetwork/INetworkService.h>
 
 #include <CryInput/IHardwareMouse.h>
+#include <CrySystem/SystemInitParams.h>
 #include <CrySystem/File/ICryPak.h>
 #include <CrySystem/ILocalizationManager.h>
 #include "Editor/GameRealtimeRemoteUpdate.h"
@@ -25,10 +26,6 @@
 
 #if ENABLE_AUTO_TESTER 
 static CAutoTester s_autoTesterSingleton;
-#endif
- 
-#if defined(ENABLE_STATS_AGENT)
-#include "StatsAgent.h"
 #endif
 
 #ifdef __LINK_GCOV__
@@ -54,12 +51,6 @@ namespace
 #define GCOV_FLUSH_UPDATE ((void)0)
 #endif
 
-#if defined(_LIB) || CRY_PLATFORM_LINUX || CRY_PLATFORM_ANDROID
-	extern "C" IGameFramework *CreateGameFramework();
-#endif
-
-#define DLL_INITFUNC_CREATEGAME "CreateGameFramework"
-
 #if CRY_PLATFORM_WINDOWS
 bool g_StickyKeysStatusSaved = false;
 STICKYKEYS g_StartupStickyKeys = {sizeof(STICKYKEYS), 0};
@@ -67,266 +58,6 @@ TOGGLEKEYS g_StartupToggleKeys = {sizeof(TOGGLEKEYS), 0};
 FILTERKEYS g_StartupFilterKeys = {sizeof(FILTERKEYS), 0};
 
 #endif
-
-#if defined(CVARS_WHITELIST)
-CCVarsWhiteList g_CVarsWhiteList;
-
-bool IsCommandLiteral(const char* pLiteral, const char* pCommand)
-{ 
-	// Compare the command with the literal, for the length of the literal
-	while ((*pLiteral) && (tolower(*pLiteral++) == tolower(*pCommand++)));
-
-	// If they're the same, ensure the whole command was tested
-	return (!*(pLiteral) && (!(*pCommand) || isspace(*pCommand)));
-}
-
-#define WHITELIST(_stringliteral) if (IsCommandLiteral(_stringliteral, pCommandMod)) { return true; }
-bool CCVarsWhiteList::IsWhiteListed(const string& command, bool silent)
-{
-	const char * pCommandMod = command.c_str();
-	if(pCommandMod[0] == '+')
-	{
-		pCommandMod++;
-	}
-	
-	WHITELIST("sys_game_folder");
-	
-	WHITELIST("map");
-	WHITELIST("i_mouse_smooth");
-	WHITELIST("i_mouse_accel");
-	WHITELIST("i_mouse_accel_max");
-	WHITELIST("cl_sensitivity");
-	WHITELIST("pl_movement.power_sprint_targetFov");
-	WHITELIST("cl_fov");
-	WHITELIST("hud_canvas_width_adjustment");
-	WHITELIST("r_DrawNearFoV");
-	WHITELIST("g_skipIntro");
-	WHITELIST("hud_psychoPsycho");
-	WHITELIST("hud_hide");
-	WHITELIST("disconnect");
-
-	WHITELIST("hud_bobHud");
-  WHITELIST("e_CoverageBufferReproj");
-  WHITELIST("e_LodRatio");
-  WHITELIST("e_ViewDistRatio");
-  WHITELIST("e_ViewDistRatioVegetation");
-  WHITELIST("e_ViewDistRatioDetail");
-  WHITELIST("e_MergedMeshesInstanceDist");
-  WHITELIST("e_MergedMeshesViewDistRatio");
-  WHITELIST("e_ParticlesObjectCollisions");
-  WHITELIST("e_ParticlesMotionBlur");
-  WHITELIST("e_ParticlesForceSoftParticles");
-  WHITELIST("e_Tessellation");
-  WHITELIST("e_TessellationMaxDistance");
-  WHITELIST("r_TessellationTriangleSize");
-  WHITELIST("r_SilhouettePOM");
-	WHITELIST("e_GI");
-	WHITELIST("e_GICache");
-  WHITELIST("e_GIIterations");
-	WHITELIST("e_ShadowsPoolSize");
-	WHITELIST("e_ShadowsMaxTexRes");
-	WHITELIST("r_FogShadows");
-	WHITELIST("r_FogShadowsWater");
-	WHITELIST("e_ParticlesShadows");
-	WHITELIST("e_ShadowsTessellateCascades");
-  WHITELIST("e_ShadowsResScale");
-  WHITELIST("e_GsmCache");
-  WHITELIST("r_WaterTessellationHW");
-  WHITELIST("r_DepthOfField");
-	WHITELIST("r_MotionBlur");
-	WHITELIST("r_MotionBlurShutterSpeed");
-	WHITELIST("g_radialBlur");
-	WHITELIST("cl_zoomToggle");
-	WHITELIST("r_TexMinAnisotropy");
-	WHITELIST("r_TexMaxAnisotropy");
-  WHITELIST("r_TexturesStreamPoolSize");
-	WHITELIST("cl_crouchToggle");
-	WHITELIST("r_ColorGrading");
-	WHITELIST("r_SSAO");
-	WHITELIST("r_SSDO");
-	WHITELIST("r_SSReflections");
-	WHITELIST("r_VSync");
-	WHITELIST("r_DisplayInfo");
-	WHITELIST("r_displayinfoTargetFPS");
-  WHITELIST("r_ChromaticAberration");
-	WHITELIST("r_HDRChromaShift");
-	WHITELIST("r_HDRGrainAmount");
-	WHITELIST("r_HDRBloomRatio");
-	WHITELIST("r_HDRBrightLevel");
-  WHITELIST("r_Sharpening");
-	WHITELIST("r_Gamma");
-	WHITELIST("r_GetScreenShot");
-	WHITELIST("r_FullscreenWindow");
-	WHITELIST("r_Fullscreen");
-	WHITELIST("r_width");
-	WHITELIST("r_height");
-	WHITELIST("r_MultiGPU");
-	WHITELIST("r_overrideDXGIOutput");
-	WHITELIST("r_overrideDXGIAdapter");
-	WHITELIST("r_FullscreenPreemption");
-  WHITELIST("r_buffer_sli_workaround");
-	WHITELIST("r_DeferredShadingAmbientSClear");
-	WHITELIST("g_useHitSoundFeedback");
-	WHITELIST("sys_MaxFps");
-	WHITELIST("g_language");
-
-	WHITELIST("sys_spec_ObjectDetail");
-	WHITELIST("sys_spec_Shading");
-	WHITELIST("sys_spec_VolumetricEffects");
-	WHITELIST("sys_spec_Shadows");
-	WHITELIST("sys_spec_Texture");
-	WHITELIST("sys_spec_Physics");
-	WHITELIST("sys_spec_PostProcessing");
-	WHITELIST("sys_spec_Particles");
-	WHITELIST("sys_spec_Sound");
-	WHITELIST("sys_spec_Water");
-	WHITELIST("sys_spec_GameEffects");
-	WHITELIST("sys_spec_Light");
-
-	WHITELIST("g_dedi_email");
-	WHITELIST("g_dedi_password");
-
-	WHITELIST("root");
-	WHITELIST("logfile");
-	WHITELIST("ResetProfile");
-	WHITELIST("nodlc");
-
-	WHITELIST("rcon_connect");
-	WHITELIST("rcon_disconnect");
-	WHITELIST("rcon_command");
-
-	WHITELIST("quit");
-	WHITELIST("votekick");
-	WHITELIST("vote");
-
-	WHITELIST("net_blaze_voip_enable");
-
-	WHITELIST("sys_vr_support");
-
-#if defined(DEDICATED_SERVER)
-	WHITELIST("ban");
-	WHITELIST("ban_remove");
-	WHITELIST("ban_status");
-	WHITELIST("ban_timeout");
-	WHITELIST("kick"); 
-	WHITELIST("startPlaylist");
-	WHITELIST("status");
-	WHITELIST("gl_map");
-	WHITELIST("gl_gamerules");
-	WHITELIST("sv_gamerules");
-	WHITELIST("sv_password");
-	WHITELIST("maxplayers");
-	WHITELIST("sv_servername");
-
-	WHITELIST("sv_bind");
-	WHITELIST("g_scoreLimit");
-	WHITELIST("g_timelimit");
-	WHITELIST("g_minplayerlimit");
-	WHITELIST("g_autoReviveTime");
-	WHITELIST("g_numLives");
-	WHITELIST("g_maxHealthMultiplier");
-	WHITELIST("g_mpRegenerationRate");
-	WHITELIST("g_friendlyfireratio");
-	WHITELIST("g_mpHeadshotsOnly");
-	WHITELIST("g_mpNoVTOL");
-	WHITELIST("g_mpNoEnvironmentalWeapons");
-	WHITELIST("g_allowCustomLoadouts");
-	WHITELIST("g_allowFatalityBonus");
-	WHITELIST("g_modevarivar_proHud");
-	WHITELIST("g_modevarivar_disableKillCam");
-	WHITELIST("g_modevarivar_disableSpectatorCam");
-	WHITELIST("g_multiplayerDefault");
-	WHITELIST("g_allowExplosives");
-	WHITELIST("g_forceWeapon");
-	WHITELIST("g_allowWeaponCustomisation");
-	WHITELIST("g_infiniteCloak");
-	WHITELIST("g_infiniteAmmo");
-	WHITELIST("g_forceHeavyWeapon");
-	WHITELIST("g_forceLoadoutPackage");
-
-
-	WHITELIST("g_autoAssignTeams");
-	WHITELIST("gl_initialTime");
-	WHITELIST("gl_time");
-	WHITELIST("g_gameRules_startTimerLength");
-	WHITELIST("sv_maxPlayers");
-	WHITELIST("g_switchTeamAllowed");
-	WHITELIST("g_switchTeamRequiredPlayerDifference");
-	WHITELIST("g_switchTeamUnbalancedWarningDifference");
-	WHITELIST("g_switchTeamUnbalancedWarningTimer");
-
-	WHITELIST("http_startserver");
-	WHITELIST("http_stopserver");
-	WHITELIST("http_password");
-
-	WHITELIST("rcon_startserver");
-	WHITELIST("rcon_stopserver");
-	WHITELIST("rcon_password");
-
-	WHITELIST("gl_StartGame");
-	WHITELIST("g_messageOfTheDay");
-	WHITELIST("g_serverImageUrl");
-
-	WHITELIST("log_Verbosity");
-	WHITELIST("log_WriteToFile");
-	WHITELIST("log_WriteToFileVerbosity");
-	WHITELIST("log_IncludeTime");
-	WHITELIST("log_tick");
-	WHITELIST("net_log");
-
-	WHITELIST("g_pinglimit");
-	WHITELIST("g_pingLimitTimer");
-
-	WHITELIST("g_tk_punish");
-	WHITELIST("g_tk_punish_limit");
-	WHITELIST("g_idleKickTime");
-
-  WHITELIST("net_reserved_slot_system");
-	WHITELIST("net_add_reserved_slot");
-	WHITELIST("net_remove_reserved_slot");
-	WHITELIST("net_list_reserved_slot");
-	
-	WHITELIST("sv_votingCooldown");
-	WHITELIST("sv_votingRatio");
-	WHITELIST("sv_votingTimeout");
-	WHITELIST("sv_votingEnable");
-	WHITELIST("sv_votingBanTime");
-
-	WHITELIST("g_dataRefreshFrequency");
-	WHITELIST("g_quitOnNewDataFound");
-	WHITELIST("g_quitNumRoundsWarning");
-	WHITELIST("g_allowedDataPatchFailCount");
-	WHITELIST("g_shutdownMessageRepeatTime");
-	WHITELIST("g_shutdownMessage");
-	WHITELIST("g_patchPakDediServerMustPatch");
-
-	WHITELIST("g_server_region");
-
-	WHITELIST("net_log_dirtysock");
-#endif
-
-	WHITELIST("sys_user_folder");
-	WHITELIST("sys_screensaver_allowed");
-	WHITELIST("sys_UncachedStreamReads");
-
-	if (!silent)
-	{
-		string temp = command.Left(command.find(' '));
-		if (temp.empty())
-		{
-			temp = command;
-		}
-
-#if defined(DEDICATED_SERVER)
-		CryLogAlways("[Warning] Unknown command: %s", temp.c_str());
-#else
-		CryLog("[Warning] Unknown command: %s", temp.c_str());
-#endif
-	}
-
-	return false;
-}
-#endif // defined(CVARS_WHITELIST)
 
 static void RestoreStickyKeys();
 
@@ -395,7 +126,7 @@ void debugLogCallStack()
 
 void GameStartupErrorObserver::OnAssert(const char* condition, const char* message, const char* fileName, unsigned int fileLineNumber)
 {
-	if(!g_pGameCVars)
+	if (!g_pGameCVars)
 		return;
 
 	if (g_pGameCVars->cl_logAsserts != 0)
@@ -449,24 +180,19 @@ static inline void InlineInitializationProcessing(const char *sDescription)
 
 IGameRef CGameStartup::Init(SSystemInitParams &startupParams)
 {
-	MEMSTAT_CONTEXT(EMemStatContextTypes::MSC_Other, 0, "Game startup initialisation");
+	MEMSTAT_CONTEXT(EMemStatContextType::Other, "Game startup initialisation");
 
 	IGameRef pOut = Reset(startupParams.pSystem);
 	CRY_ASSERT(gEnv && GetISystem());
 
 	m_pFramework = gEnv->pGameFramework;
 
-#if defined(CVARS_WHITELIST)
-	startupParams.pCVarsWhitelist = &g_CVarsWhiteList;
-#endif // defined(CVARS_WHITELIST)
-	startupParams.pGameStartup = this;
-
 	InlineInitializationProcessing("CGameStartup::Init");
 
-  LOADING_TIME_PROFILE_SECTION(GetISystem());
+	CRY_PROFILE_FUNCTION(PROFILE_LOADING_ONLY);
 
 	// Load thread config
-	gEnv->pThreadManager->GetThreadConfigManager()->LoadConfig("config/game.thread_config");
+	gEnv->pThreadManager->GetThreadConfigManager()->LoadConfig("%engine%/config/game.thread_config");
 
 	const ICmdLineArg* pSvBind = GetISystem()->GetICmdLine()->FindArg(eCLAT_Pre, "sv_bind");
 	IConsole* pConsole = GetISystem()->GetIConsole();
@@ -476,19 +202,7 @@ IGameRef CGameStartup::Init(SSystemInitParams &startupParams)
 		pConsole->ExecuteString(command.c_str(), true, false);
 	}
 
-#if defined(ENABLE_STATS_AGENT)
-	const ICmdLineArg *pPipeArg = GetISystem()->GetICmdLine()->FindArg(eCLAT_Pre,"lt_pipename");
-	CStatsAgent::CreatePipe( pPipeArg );
-#endif
-
-	// load the appropriate game/mod
-#if !defined(_RELEASE)
-	const ICmdLineArg *pModArg = GetISystem()->GetICmdLine()->FindArg(eCLAT_Pre,"MOD");
-#else
-	const ICmdLineArg *pModArg = NULL;
-#endif // !defined(_RELEASE)
-
-	GetISystem()->GetISystemEventDispatcher()->RegisterListener(this);
+	GetISystem()->GetISystemEventDispatcher()->RegisterListener(this, "CGameStartup");
 
 	// Creates and starts the realtime update system listener.
 	if (GetISystem()->IsDevMode())
@@ -502,6 +216,8 @@ IGameRef CGameStartup::Init(SSystemInitParams &startupParams)
 	GetISystem()->RegisterWindowMessageHandler(this);
 
 	InlineInitializationProcessing("CGameStartup::Init End");
+
+	CryRegisterFlowNodes();
 
 	assert(gEnv);
 	PREFAST_ASSUME(gEnv);
@@ -531,12 +247,10 @@ IGameRef CGameStartup::Reset(ISystem* pSystem)
 
 void CGameStartup::Shutdown()
 {
+	CryUnregisterFlowNodes();
+
 #if CRY_PLATFORM_WINDOWS
 	AllowAccessibilityShortcutKeys(true);
-#endif
-
-#if defined(ENABLE_STATS_AGENT)
-	CStatsAgent::ClosePipe();
 #endif
 
 	GetISystem()->UnregisterErrorObserver(&m_errorObsever);
@@ -682,7 +396,6 @@ bool PerformDedicatedInstallationSanityCheck()
 #endif
 
 // If you have a valid RSA key set it here and set USE_RSA_KEY to 1
-#ifndef IS_EAAS
 #define USE_RSA_KEY 0
 #if USE_RSA_KEY
 static unsigned char g_rsa_public_key_data[] =
@@ -694,22 +407,6 @@ static unsigned char g_rsa_public_key_data[] =
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-};
-#endif
-#else
-// For EaaS, a key is required in release mode
-// However, we set it in other configurations as well, so that signed PAK files can be loaded
-// This is a default key that is used by CryTek to sign the EaaS PAK files, you need to replace it with your own
-#define USE_RSA_KEY 1
-static unsigned char g_rsa_public_key_data[] =
-{
-	0x30,0x81,0x89,0x02,0x81,0x81,0x00,0xC5,0x66,0xA7,0xE5,0x21,0x0B,0x25,0x54,0xCC,0x29,0x53,0xD9,0x2F,
-	0x87,0xE8,0x8D,0x1E,0x03,0xE7,0x03,0x29,0x08,0x89,0xDF,0xC3,0x88,0xFA,0xA1,0x20,0x69,0x1B,0xD0,0xE6,
-	0x09,0xC0,0xB1,0x81,0x13,0xFD,0x9D,0x2C,0x1F,0xC2,0x3B,0x10,0xA3,0x19,0xF4,0xA5,0xB2,0xBE,0x63,0xAD,
-	0x76,0xD7,0xEB,0x6D,0x32,0xAA,0x3D,0xC1,0xE3,0x00,0x88,0x2E,0x5A,0x11,0xE8,0xD6,0x88,0xF0,0xA3,0x35,
-	0xF4,0xB8,0x89,0xFE,0xDB,0x3E,0x0A,0x75,0x75,0x00,0x3D,0x4A,0xA3,0xB2,0xC6,0x27,0x60,0x05,0x90,0x7A,
-	0x25,0x0E,0x45,0x32,0x1E,0xD7,0xE3,0x3B,0x50,0x17,0xE1,0xC0,0xAC,0xA6,0x8F,0xA5,0x54,0x8B,0x63,0x4E,
-	0x05,0x93,0x4F,0x64,0xB4,0x35,0x52,0xE5,0x8C,0xD5,0xC0,0x7C,0x9A,0x69,0x0B,0x02,0x03,0x01,0x00,0x01
 };
 #endif
 
@@ -759,7 +456,7 @@ void CGameStartup::OnSystemEvent(ESystemEvent event, UINT_PTR wparam, UINT_PTR l
 
 //////////////////////////////////////////////////////////////////////////
 #if CRY_PLATFORM_WINDOWS
-bool CGameStartup::HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, LRESULT *pResult)
+bool CGameStartup::HandleMessage(CRY_HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, LRESULT *pResult)
 {
 	switch(msg)
 	{

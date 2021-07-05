@@ -1,7 +1,8 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "RuntimeAreaObject.h"
+#include <Cry3DEngine/ISurfaceType.h>
 
 CRuntimeAreaObject::TAudioControlMap CRuntimeAreaObject::m_audioControls;
 
@@ -28,7 +29,7 @@ bool CRuntimeAreaObject::ReloadExtension(IGameObject* pGameObject, const SEntity
 {
 	ResetGameObject();
 
-	CRY_ASSERT_MESSAGE(false, "CRuntimeAreaObject::ReloadExtension not implemented");
+	CRY_ASSERT(false, "CRuntimeAreaObject::ReloadExtension not implemented");
 
 	return false;
 }
@@ -36,13 +37,13 @@ bool CRuntimeAreaObject::ReloadExtension(IGameObject* pGameObject, const SEntity
 ///////////////////////////////////////////////////////////////////////////
 bool CRuntimeAreaObject::NetSerialize(TSerialize ser, EEntityAspects aspect, uint8 profile, int flags)
 {
-	CRY_ASSERT_MESSAGE(false, "CRuntimeAreaObject::NetSerialize not implemented");
+	CRY_ASSERT(false, "CRuntimeAreaObject::NetSerialize not implemented");
 
 	return false;
 }
 
 ///////////////////////////////////////////////////////////////////////////
-void CRuntimeAreaObject::ProcessEvent(SEntityEvent& entityEvent)
+void CRuntimeAreaObject::ProcessEvent(const SEntityEvent& entityEvent)
 {
 	switch (entityEvent.event)
 	{
@@ -96,6 +97,12 @@ void CRuntimeAreaObject::ProcessEvent(SEntityEvent& entityEvent)
 }
 
 ///////////////////////////////////////////////////////////////////////////
+Cry::Entity::EventFlags CRuntimeAreaObject::GetEventMask() const
+{
+	return ENTITY_EVENT_ENTERAREA | ENTITY_EVENT_LEAVEAREA | ENTITY_EVENT_MOVEINSIDEAREA;
+}
+
+///////////////////////////////////////////////////////////////////////////
 void CRuntimeAreaObject::GetMemoryUsage(ICrySizer* pSizer) const
 {
 	pSizer->AddObject(this, sizeof(*this));
@@ -144,7 +151,7 @@ void CRuntimeAreaObject::UpdateParameterValues(IEntity* const pEntity, TAudioPar
 					{
 						SAudioControls const& rAudioControls = iAudioControls->second;
 
-						pAudioProxy->SetRtpcValue(rAudioControls.audioRtpcId, fNewParamValue);
+						pAudioProxy->SetParameter(rAudioControls.audioRtpcId, fNewParamValue);
 						pAudioProxy->ExecuteTrigger(rAudioControls.audioTriggerId);
 
 						paramMap.insert(
@@ -160,7 +167,7 @@ void CRuntimeAreaObject::UpdateParameterValues(IEntity* const pEntity, TAudioPar
 				if (fabs_tpl(fNewParamValue - oSoundInfo.parameter) >= fParamEpsilon)
 				{
 					oSoundInfo.parameter = fNewParamValue;
-					pAudioProxy->SetRtpcValue(oSoundInfo.audioControls.audioRtpcId, oSoundInfo.parameter);
+					pAudioProxy->SetParameter(oSoundInfo.audioControls.audioRtpcId, oSoundInfo.parameter);
 				}
 			}
 		}
@@ -179,7 +186,7 @@ void CRuntimeAreaObject::StopEntitySounds(EntityId const entityId, TAudioParamet
 			for (TAudioParameterMap::const_iterator iSoundPair = paramMap.begin(), iSoundPairEnd = paramMap.end(); iSoundPair != iSoundPairEnd; ++iSoundPair)
 			{
 				pAudioProxy->StopTrigger(iSoundPair->second.audioControls.audioTriggerId);
-				pAudioProxy->SetRtpcValue(iSoundPair->second.audioControls.audioRtpcId, 0.0f);
+				pAudioProxy->SetParameter(iSoundPair->second.audioControls.audioRtpcId, 0.0f);
 			}
 
 			paramMap.clear();

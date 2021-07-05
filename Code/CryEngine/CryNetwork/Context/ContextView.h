@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 /*************************************************************************
    -------------------------------------------------------------------------
@@ -63,12 +63,21 @@ struct SSimpleObjectIDParams
 	}
 };
 
-struct SRemoveStaticObject
+struct SRemovePredictedObject
 {
 	EntityId id;
 	void     SerializeWith(TSerialize ser)
 	{
 		ser.Value("id", id);
+	}
+};
+
+struct SRemoveStaticObject
+{
+	IEntitySystem::StaticEntityNetworkIdentifier staticId;
+	void     SerializeWith(TSerialize ser)
+	{
+		ser.Value("id", staticId);
 	}
 };
 
@@ -107,9 +116,6 @@ struct SContextViewConfiguration
 	std::array<const SNetMessageDef*, NumAspects> pPartialUpdate;
 	std::array<const SNetMessageDef*, NumAspects> pSetAspectProfileMsgs;
 	std::array<const SNetMessageDef*, NumAspects> pUpdateAspectMsgs;
-#if ENABLE_ASPECT_HASHING
-	std::array<const SNetMessageDef*, NumAspects> pHashAspectMsgs;
-#endif
 	const SNetMessageDef* pRMIMsgs[eNRT_NumReliabilityTypes + 1];
 };
 
@@ -298,6 +304,8 @@ public:
 
 	CMementoMemoryManager& GetMMM() { return *m_pMMM; }
 
+	static const char* GetStateName(EContextViewState state);
+
 protected:
 	void Init(
 	  CNetChannel* pParent,
@@ -312,7 +320,6 @@ protected:
 	virtual void OnViewStateDisconnect(const char* message);
 	// ~CContextViewStateManager
 
-	static const char* GetStateName(EContextViewState state);
 	static const char* GetWaitStateName(EContextViewState state);
 
 	// enable synchronization of an object
@@ -347,10 +354,6 @@ protected:
 	void         SetName(const string& name) { NET_ASSERT(m_name.empty()); m_name = name; }
 
 	virtual void UnboundObject(SNetObjectID id);
-
-#if ENABLE_ASPECT_HASHING
-	bool HashAspect(NetworkAspectID aspectIdx, TSerialize ser, uint32, uint32, uint32);
-#endif
 
 	virtual void InitChannelEstablishmentTasks(IContextEstablisher* pEst);
 
@@ -488,10 +491,6 @@ protected:
 	};
 #endif
 
-#if ENABLE_ASPECT_HASHING
-	class CHashMessage;
-#endif
-
 	class CNotifyPartialUpdateMessage;
 
 	bool            HaveAuthorityOfObject(SNetObjectID id) const;
@@ -555,7 +554,7 @@ private:
 	}
 
 	typedef std::map<SAttachmentIndex, IRMIMessageBodyPtr, std::less<SAttachmentIndex>, STLMementoAllocator<std::pair<const SAttachmentIndex, IRMIMessageBodyPtr>>> TAttachmentMap;
-	std::auto_ptr<TAttachmentMap> m_pAttachments[2];
+	std::unique_ptr<TAttachmentMap> m_pAttachments[2];
 
 #if ENABLE_DEFERRED_RMI_QUEUE
 	typedef std::vector<IRMIMessageBodyPtr> TDeferredRMIVec;
@@ -568,7 +567,7 @@ protected:
 #else
 	typedef std::multimap<SNetObjectID, SSendableHandle, std::less<SNetObjectID>, STLMementoAllocator<std::pair<const SNetObjectID, SSendableHandle>>> TSendablesMap;
 #endif
-	std::auto_ptr<TSendablesMap> m_pSendables;
+	std::unique_ptr<TSendablesMap> m_pSendables;
 
 private:
 	typedef std::vector<IContextViewExtension*> TExtensionsSet;
@@ -585,7 +584,7 @@ private:
 	SNetObjectID                             m_witness;
 	VectorMap<SNetObjectID, SSendableHandle> m_voiceMessageHandles;
 	typedef std::map<SNetObjectID, NetworkAspectType, std::less<SNetObjectID>, STLMementoAllocator<std::pair<const SNetObjectID, NetworkAspectType>>> TEarlyPartialUpdateIDs;
-	std::auto_ptr<TEarlyPartialUpdateIDs>    m_pEarlyPartialUpdateIDs;
+	std::unique_ptr<TEarlyPartialUpdateIDs>    m_pEarlyPartialUpdateIDs;
 
 	CTimeValue                               m_remotePhysicsTime;
 

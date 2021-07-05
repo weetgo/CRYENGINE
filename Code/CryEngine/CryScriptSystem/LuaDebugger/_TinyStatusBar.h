@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #ifndef __TINY_STATUS_BAR__
 #define __TINY_STATUS_BAR__
@@ -12,6 +12,9 @@
 class _TinyStatusBar : public _TinyWindow
 {
 public:
+
+	using _TinyWindow::Create;
+
 	_TinyStatusBar() {};
 	virtual ~_TinyStatusBar() {};
 

@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "Network.h"
@@ -8,8 +8,6 @@
 #include <CryCore/Base64.h>
 
 //#include <sstream>
-
-#pragma warning(disable:4355)
 
 #define CR                     '\r'
 #define LF                     '\n'
@@ -25,8 +23,11 @@ CSimpleHttpServer& CSimpleHttpServer::GetSingleton()
 	return s_singleton;
 }
 
+#pragma warning(push)
+#pragma warning(disable:4355) //'this' : used in base member initializer list
 CSimpleHttpServer::CSimpleHttpServer() : m_internal(this)
 {
+#pragma warning(pop)
 	m_pListener = NULL;
 
 #if defined(HTTP_WEBSOCKETS)
@@ -35,11 +36,7 @@ CSimpleHttpServer::CSimpleHttpServer() : m_internal(this)
 }
 
 CSimpleHttpServer::~CSimpleHttpServer()
-{
-#if defined(HTTP_WEBSOCKETS)
-	SAFE_RELEASE(m_pWsAllocHeap);
-#endif
-}
+{}
 
 void CSimpleHttpServer::Start(uint16 port, const string& password, IHttpServerListener* pListener)
 {

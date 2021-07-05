@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "stdafx.h"
 #include "SkeletonAnim.h"
@@ -72,16 +72,18 @@ void CSkeletonAnim::FinishAnimationComputations()
 	const CharacterInstanceProcessing::SContext* pCtx = m_pInstance->GetProcessingContext();
 	if (pCtx)
 	{
-		g_pCharacterManager->GetContextSyncQueue().ExecuteForContextAndAllChildrenRecursively(
-		  pCtx->slot, [](CharacterInstanceProcessing::SContext& ctx)
+		const auto finishFunction = [](CharacterInstanceProcessing::SContext& ctx)
 		{
 			ctx.job.Wait();
 			return CharacterInstanceProcessing::SFinishAnimationComputations()(ctx);
-		});
+		};
+
+		g_pCharacterManager->GetContextSyncQueue().ExecuteForAllParentsRecursively(pCtx->slot, finishFunction);
+		g_pCharacterManager->GetContextSyncQueue().ExecuteForContextAndAllChildrenRecursively(pCtx->slot, finishFunction);
 	}
 }
 
-CryGUID GUID_AnimationPoseModifier_TransformationPin = CryGUID::Construct(0xcc34ddea972e47daULL, 0x93f9cdcb98c28c8eULL);
+constexpr CryGUID GUID_AnimationPoseModifier_TransformationPin = "cc34ddea-972e-47da-93f9-cdcb98c28c8e"_cry_guid;
 bool CSkeletonAnim::PushPoseModifier(uint32 layer, IAnimationPoseModifierPtr poseModifier, const char* name)
 {
 	if (poseModifier)
@@ -113,6 +115,8 @@ bool CSkeletonAnim::PushPoseModifier(uint32 layer, IAnimationPoseModifierPtr pos
 
 void CSkeletonAnim::PoseModifiersPrepare(const QuatTS& location)
 {
+	DEFINE_PROFILER_FUNCTION();
+
 	Skeleton::CPoseData* pPoseData = m_pSkeletonPose->GetPoseDataWriteable();
 
 	if (m_pSkeletonPose->m_bFullSkeletonUpdate && !m_pSkeletonPose->m_physics.m_bPhysicsRelinquished)
@@ -171,6 +175,8 @@ void CSkeletonAnim::PoseModifiersPrepare(const QuatTS& location)
 
 void CSkeletonAnim::PoseModifiersExecutePost(Skeleton::CPoseData& poseData, const QuatTS& location)
 {
+	DEFINE_PROFILER_FUNCTION();
+
 	SAnimationPoseModifierParams params;
 	params.pCharacterInstance = m_pInstance;
 	params.pPoseData = &poseData;
@@ -183,6 +189,8 @@ void CSkeletonAnim::PoseModifiersExecutePost(Skeleton::CPoseData& poseData, cons
 
 void CSkeletonAnim::PoseModifiersSynchronize()
 {
+	DEFINE_PROFILER_FUNCTION();
+
 	for (uint i = 0; i < numVIRTUALLAYERS; ++i)
 	{
 		m_layers[i].m_poseModifierQueue.Synchronize();
@@ -197,6 +205,8 @@ void CSkeletonAnim::PoseModifiersSynchronize()
 
 void CSkeletonAnim::PoseModifiersSwapBuffersAndClearActive()
 {
+	DEFINE_PROFILER_FUNCTION();
+
 	for (uint i = 0; i < numVIRTUALLAYERS; ++i)
 	{
 		m_layers[i].m_poseModifierQueue.SwapBuffersAndClearActive();
@@ -243,8 +253,6 @@ void CSkeletonAnim::ProcessAnimations(const QuatTS& rAnimLocationCurr)
 		m_pSkeletonPose->m_bSetDefaultPoseExecute = false;
 	}
 
-	Skeleton::CPoseData& poseData = m_pSkeletonPose->GetPoseDataExplicitWriteable();
-
 	if (m_pInstance->m_CharEditMode == 0)
 	{
 		int nCurrentFrameID = g_pCharacterManager->m_nUpdateCounter;
@@ -269,8 +277,6 @@ void CSkeletonAnim::ProcessAnimations(const QuatTS& rAnimLocationCurr)
 void CSkeletonAnim::ProcessAnimationUpdate(const QuatTS rAnimLocationCurr)
 {
 	DEFINE_PROFILER_FUNCTION();
-
-	CSkeletonPose* const __restrict pSkeletonPose = m_pSkeletonPose;
 
 	CPoseBlenderAim* pPBAim = static_cast<CPoseBlenderAim*>(m_pSkeletonPose->m_PoseBlenderAim.get());
 	if (pPBAim)
@@ -387,10 +393,10 @@ void CSkeletonAnim::Serialize(TSerialize ser)
 				}
 
 #ifdef _DEBUG
-				assert(pAnim);
+				CRY_ASSERT(pAnim);
 				if (anim.GetParametricSampler() != NULL)
 				{
-					assert(pAnim->m_nAssetType == LMG_File);  //obvious
+					CRY_ASSERT(pAnim->m_nAssetType == LMG_File);  //obvious
 				}
 #endif
 
@@ -479,7 +485,7 @@ void CSkeletonAnim::GetMemoryUsage(ICrySizer* pSizer) const
 
 Vec3 CSkeletonAnim::GetCurrentVelocity() const
 {
-	float fColDebug[4] = { 1, 1, 0, 1 };
+	//float fColDebug[4] = { 1, 1, 0, 1 };
 	f32 fDT = m_pInstance->m_fDeltaTime;
 	if (fDT == 0)
 	{
